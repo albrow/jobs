@@ -37,14 +37,14 @@ func (j *JobType) String() string {
 	return j.name
 }
 
-func (j *JobType) Do(data interface{}, when time.Timer) {
+func (j *JobType) Do(data interface{}, time time.Timer) (*Job, error) {
 
 }
 
-func (j *JobType) DoNow(data interface{}) {
+func (j *JobType) DoNow(data interface{}) (*Job, error) {
 
 }
 
-func (j *JobType) Repeat(data interface{}, frequency time.Duration) {
+func (j *JobType) Repeat(data interface{}, frequency time.Duration) (*Job, error) {
 
 }

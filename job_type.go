@@ -37,14 +37,14 @@ func (j *JobType) String() string {
 	return j.name
 }
 
-func (j *JobType) Do(data interface{}, time time.Timer) (*Job, error) {
-
+func (j *JobType) Do(data interface{}, priority int, time time.Time) (*Job, error) {
+	return nil, nil
 }
 
-func (j *JobType) DoNow(data interface{}) (*Job, error) {
-
+func (j *JobType) DoNow(data interface{}, priority int) (*Job, error) {
+	return nil, nil
 }
 
-func (j *JobType) Repeat(data interface{}, frequency time.Duration) (*Job, error) {
-
+func (j *JobType) Repeat(data interface{}, priority int, frequency time.Duration) (*Job, error) {
+	return nil, nil
 }

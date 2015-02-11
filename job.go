@@ -29,6 +29,16 @@ const (
 	StatusDestroyed = "destroyed"
 )
 
+var possibleStatuses = []JobStatus{
+	StatusSaved,
+	StatusQueued,
+	StatusExecuting,
+	StatusFinished,
+	StatusError,
+	StatusCancelled,
+	StatusDestroyed,
+}
+
 func (j *Job) Id() string {
 	return j.id
 }

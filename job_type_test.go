@@ -15,6 +15,10 @@ func TestRegisterJobType(t *testing.T) {
 	if jobType.name != testJobName {
 		t.Errorf("Got wrong name for job type. Expected %s but got %s", testJobName, jobType.name)
 	}
+	// Make sure the jobType was added to the global map
+	if _, found := jobTypes[testJobName]; !found {
+		t.Errorf("JobType was not added to the global map of job types.")
+	}
 	// Make sure we cannot register a job type with the same name
 	if _, err := RegisterJobType(testJobName, func() {}); err == nil {
 		t.Errorf("Expected error when registering job with the same name but got none")

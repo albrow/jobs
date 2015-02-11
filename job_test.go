@@ -118,7 +118,7 @@ func TestJobDestroy(t *testing.T) {
 func createTestJob() (*Job, error) {
 	// Register the "testJobType"
 	jobTypeName := "testJobType"
-	jobType, err := RegisterJobType(jobTypeName)
+	jobType, err := RegisterJobType(jobTypeName, func() {})
 	if err != nil {
 		if _, ok := err.(ErrorNameAlreadyRegistered); !ok {
 			// If the name was already registered, that's fine.

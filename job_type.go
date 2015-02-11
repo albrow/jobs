@@ -2,6 +2,7 @@ package zazu
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 )
 
@@ -9,7 +10,9 @@ import (
 var jobTypes = map[string]*JobType{}
 
 type JobType struct {
-	name string
+	name     string
+	handler  interface{}
+	dataType reflect.Type
 }
 
 type ErrorNameAlreadyRegistered struct {
@@ -24,11 +27,26 @@ func NewErrorNameAlreadyRegistered(name string) ErrorNameAlreadyRegistered {
 	return ErrorNameAlreadyRegistered{name: name}
 }
 
-func RegisterJobType(name string) (*JobType, error) {
+func RegisterJobType(name string, handler interface{}) (*JobType, error) {
+	// Make sure name is unique
 	if _, found := jobTypes[name]; found {
 		return jobTypes[name], NewErrorNameAlreadyRegistered(name)
 	}
-	jobType := &JobType{name: name}
+	// Make sure handler is a function
+	handlerType := reflect.TypeOf(handler)
+	if handlerType.Kind() != reflect.Func {
+		return nil, fmt.Errorf("zazu: in RegisterNewJobType, handler must be a function. Got %T", handler)
+	}
+	if handlerType.NumIn() > 1 {
+		return nil, fmt.Errorf("zazu: in RegisterNewJobTyp, handler must accept 0 or 1 arguments. Got %d.", handlerType.NumIn())
+	}
+	jobType := &JobType{
+		name:    name,
+		handler: handler,
+	}
+	if handlerType.NumIn() == 1 {
+		jobType.dataType = handlerType.In(0)
+	}
 	jobTypes[name] = jobType
 	return jobType, nil
 }
@@ -37,14 +55,6 @@ func (j *JobType) String() string {
 	return j.name
 }
 
-func (j *JobType) Do(data interface{}, priority int, time time.Time) (*Job, error) {
-	return nil, nil
-}
-
-func (j *JobType) DoNow(data interface{}, priority int) (*Job, error) {
-	return nil, nil
-}
-
-func (j *JobType) Repeat(data interface{}, priority int, frequency time.Duration) (*Job, error) {
+func (j *JobType) Enqueue(data interface{}, priority int, time time.Time) (*Job, error) {
 	return nil, nil
 }

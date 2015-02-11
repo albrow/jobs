@@ -130,7 +130,7 @@ func (j *Job) Destroy() error {
 		return err
 	}
 	// Remove the job hash
-	if err := conn.Send("DELETE", j.mainHashArgs()[0]); err != nil {
+	if err := conn.Send("DEL", j.mainHashArgs()[0]); err != nil {
 		return err
 	}
 	// Remove the job from the index

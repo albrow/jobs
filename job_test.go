@@ -75,6 +75,46 @@ func TestJobCancel(t *testing.T) {
 	testJobStatePaths(t, statePaths)
 }
 
+func TestJobDestroy(t *testing.T) {
+	// Run through a set of possible state paths and make sure the result is
+	// always what we expect
+	statePaths := []statePath{
+		{
+			steps: []func(*Job) error{
+				// Just call Destroy after creating a new job
+				destroyJob,
+			},
+			expected: StatusDestroyed,
+		},
+		{
+			steps: []func(*Job) error{
+				// Call Destroy after cancel
+				cancelJob,
+				destroyJob,
+			},
+			expected: StatusDestroyed,
+		},
+		{
+			steps: []func(*Job) error{
+				// Call Destroy after enqueue
+				enqueueJob,
+				destroyJob,
+			},
+			expected: StatusDestroyed,
+		},
+		{
+			steps: []func(*Job) error{
+				// Call Destroy after enqueue then cancel
+				enqueueJob,
+				cancelJob,
+				destroyJob,
+			},
+			expected: StatusDestroyed,
+		},
+	}
+	testJobStatePaths(t, statePaths)
+}
+
 func createTestJob() (*Job, error) {
 	// Register the "testJobType"
 	jobTypeName := "testJobType"
@@ -129,17 +169,19 @@ func assertJobFieldEquals(t *testing.T, j *Job, fieldName string, expected inter
 
 type replyConverter func(interface{}) (interface{}, error)
 
-var int64Converter replyConverter = func(in interface{}) (interface{}, error) {
-	return redis.Int64(in, nil)
-}
+var (
+	int64Converter replyConverter = func(in interface{}) (interface{}, error) {
+		return redis.Int64(in, nil)
+	}
 
-var intConverter replyConverter = func(in interface{}) (interface{}, error) {
-	return redis.Int(in, nil)
-}
+	intConverter replyConverter = func(in interface{}) (interface{}, error) {
+		return redis.Int(in, nil)
+	}
 
-var stringConverter replyConverter = func(in interface{}) (interface{}, error) {
-	return redis.String(in, nil)
-}
+	stringConverter replyConverter = func(in interface{}) (interface{}, error) {
+		return redis.String(in, nil)
+	}
+)
 
 func assertJobInSet(t *testing.T, j *Job, setName string) {
 	conn := redisPool.Get()
@@ -185,14 +227,43 @@ func assertJobStatusEquals(t *testing.T, job *Job, expected JobStatus) {
 	if job.status != expected {
 		t.Errorf("Expected job status to be %s but got %s", expected, job.status)
 	}
+	if expected == StatusDestroyed {
+		// If the status is destroyed, we don't expect the job to be in the database
+		// anymore.
+		assertJobDestroyed(t, job)
+	} else {
+		// For every status other status, we expect the job to be in the database
+		for _, status := range possibleStatuses {
+			setName := string("jobs:" + status)
+			if status == expected {
+				// Make sure the job hash has the correct status
+				assertJobInSet(t, job, setName)
+				// Make sure the job is in the correct set
+				assertJobFieldEquals(t, job, "status", string(status), stringConverter)
+			} else {
+				// Make sure the job is not in any other set
+				assertJobNotInSet(t, job, setName)
+			}
+		}
+	}
+}
+
+func assertJobDestroyed(t *testing.T, job *Job) {
+	// Make sure the main hash is gone
+	assertKeyNoExist(t, "jobs:"+job.id)
 	for _, status := range possibleStatuses {
 		setName := string("jobs:" + status)
-		if status == expected {
-			assertJobInSet(t, job, setName)
-			assertJobFieldEquals(t, job, "status", string(status), stringConverter)
-		} else {
-			assertJobNotInSet(t, job, setName)
-		}
+		assertJobNotInSet(t, job, setName)
+	}
+}
+
+func assertKeyNoExist(t *testing.T, key string) {
+	conn := redisPool.Get()
+	defer conn.Close()
+	if exists, err := redis.Bool(conn.Do("EXISTS", key)); err != nil {
+		t.Errorf("Unexpected error in EXISTS: %s", err.Error())
+	} else if exists {
+		t.Errorf("Expected key %s to not exist, but it did exist.", key)
 	}
 }
 
@@ -211,6 +282,9 @@ var (
 	}
 	cancelJob = func(j *Job) error {
 		return j.Cancel()
+	}
+	destroyJob = func(j *Job) error {
+		return j.Destroy()
 	}
 )
 

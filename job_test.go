@@ -9,6 +9,8 @@ import (
 )
 
 func TestJobSave(t *testing.T) {
+	flushdb()
+
 	// Create and save a test job
 	jobId := "testJob"
 	jobData := []byte("testData")
@@ -26,16 +28,19 @@ func TestJobSave(t *testing.T) {
 		time:     jobTime,
 		priority: jobPriority,
 	}
-	if err := j.Save(); err != nil {
-		t.Errorf("Unexpected error in j.Save(): %s", err.Error())
+	if err := j.save(); err != nil {
+		t.Errorf("Unexpected error in j.save(): %s", err.Error())
 	}
+
 	// Make sure the main hash was saved correctly
 	assertJobFieldEquals(t, j, "data", jobData, nil)
-	assertJobFieldEquals(t, j, "time", jobTime, int64Converter)
 	assertJobFieldEquals(t, j, "type", jobType.name, stringConverter)
+	assertJobFieldEquals(t, j, "status", "saved", stringConverter)
+	assertJobFieldEquals(t, j, "time", jobTime, int64Converter)
 	assertJobFieldEquals(t, j, "priority", jobPriority, intConverter)
-	// Make sure the job was indexed correctly by its priority
-	assertJobPriorityEquals(t, j, jobPriority)
+
+	// Make sure the job was in the saved set
+	assertJobInSet(t, j, "jobs:saved")
 }
 
 func assertJobFieldEquals(t *testing.T, j *Job, fieldName string, expected interface{}, converter replyConverter) {
@@ -71,14 +76,23 @@ var stringConverter replyConverter = func(in interface{}) (interface{}, error) {
 	return redis.String(in, nil)
 }
 
-func assertJobPriorityEquals(t *testing.T, j *Job, priority int) {
+func assertJobInSet(t *testing.T, j *Job, setName string) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	got, err := redis.Values(conn.Do("ZRANGEBYSCORE", "jobs:priority", priority, priority))
+	gotIds, err := redis.Values(conn.Do("ZRANGEBYSCORE", setName, j.priority, j.priority))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
-	if len(got) != 1 {
-		t.Errorf("job.priority was not indexed correctly. Expected to find one job with the given priority but found %d", len(got))
+	for _, id := range gotIds {
+		idBytes, ok := id.([]byte)
+		if !ok {
+			t.Errorf("Could not convert job id of type %T to string!", id)
+		}
+		if string(idBytes) == j.id {
+			// We found the job we were looking for
+			return
+		}
 	}
+	// If we reached here, we did not find the job we were looking for
+	t.Errorf("job:%s was not found in set %s", j.id, setName)
 }

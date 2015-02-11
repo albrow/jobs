@@ -102,15 +102,6 @@ func (j *Job) Cancel() error {
 	return nil
 }
 
-// finish sets the job status to StatusFinished and adds it to a list of finished jobs.
-// Workers will automatically call this method when they are done finishing a job.
-func (j *Job) finish() error {
-	if err := j.setStatus(StatusFinished); err != nil {
-		return err
-	}
-	return nil
-}
-
 // setError sets the err property of j and adds it to the set of jobs which had errors
 func (j *Job) setError(err error) error {
 	// TODO: implement this

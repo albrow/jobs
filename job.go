@@ -153,7 +153,7 @@ func (j *Job) setStatus(status JobStatus) error {
 	}
 	// Set the job status in the hash
 	hashKey := fmt.Sprintf("jobs:%s", j.id)
-	if err := conn.Send("HSET", hashKey, "status", j.status); err != nil {
+	if err := conn.Send("HSET", hashKey, "status", status); err != nil {
 		return err
 	}
 	// Remove from the old set
@@ -164,7 +164,7 @@ func (j *Job) setStatus(status JobStatus) error {
 	}
 	// Add to the new set
 	newSetKey := fmt.Sprintf("jobs:%s", status)
-	if err := conn.Send("ZREM", newSetKey, j.id); err != nil {
+	if err := conn.Send("ZADD", newSetKey, j.priority, j.id); err != nil {
 		return err
 	}
 	// Execute the transaction

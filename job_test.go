@@ -12,35 +12,76 @@ func TestJobSave(t *testing.T) {
 	flushdb()
 
 	// Create and save a test job
-	jobId := "testJob"
-	jobData := []byte("testData")
-	jobTypeName := "testJobType"
-	jobTime := time.Now().UTC().Unix()
-	jobPriority := 100
-	jobType, err := RegisterJobType(jobTypeName)
+	job, err := createAndSaveTestJob()
 	if err != nil {
-		panic(err)
-	}
-	j := &Job{
-		id:       jobId,
-		data:     jobData,
-		typ:      jobType,
-		time:     jobTime,
-		priority: jobPriority,
-	}
-	if err := j.save(); err != nil {
-		t.Errorf("Unexpected error in j.save(): %s", err.Error())
+		t.Error(err)
 	}
 
 	// Make sure the main hash was saved correctly
-	assertJobFieldEquals(t, j, "data", jobData, nil)
-	assertJobFieldEquals(t, j, "type", jobType.name, stringConverter)
-	assertJobFieldEquals(t, j, "status", "saved", stringConverter)
-	assertJobFieldEquals(t, j, "time", jobTime, int64Converter)
-	assertJobFieldEquals(t, j, "priority", jobPriority, intConverter)
+	assertJobFieldEquals(t, job, "data", job.data, nil)
+	assertJobFieldEquals(t, job, "type", job.typ.name, stringConverter)
+	assertJobFieldEquals(t, job, "status", "saved", stringConverter)
+	assertJobFieldEquals(t, job, "time", job.time, int64Converter)
+	assertJobFieldEquals(t, job, "priority", job.priority, intConverter)
 
 	// Make sure the job was in the saved set
-	assertJobInSet(t, j, "jobs:saved")
+	assertJobInSet(t, job, "jobs:"+StatusSaved)
+}
+
+func TestJobEnqueue(t *testing.T) {
+	flushdb()
+
+	// Create and save a test job
+	job, err := createAndSaveTestJob()
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Call job.Enqueue()
+	if err := job.Enqueue(); err != nil {
+		t.Errorf("Unexpected error in job.Enqueue(): %s", err.Error())
+	}
+
+	// Make sure the job status was changed and it is in the correct set
+	if job.status != StatusQueued {
+		t.Errorf("Expected job status to be %s but got %s", StatusQueued, job.status)
+	}
+	assertJobFieldEquals(t, job, "status", StatusQueued, stringConverter)
+	assertJobInSet(t, job, "jobs:"+StatusQueued)
+	assertJobNotInSet(t, job, "jobs:"+StatusSaved)
+}
+
+func createTestJob() (*Job, error) {
+	// Register the "testJobType"
+	jobTypeName := "testJobType"
+	jobType, err := RegisterJobType(jobTypeName)
+	if err != nil {
+		if _, ok := err.(ErrorNameAlreadyRegistered); !ok {
+			// If the name was already registered, that's fine.
+			// We should return any other type of error
+			return nil, err
+		}
+	}
+	// Create and return a test job
+	j := &Job{
+		id:       "testJob",
+		data:     []byte("testData"),
+		typ:      jobType,
+		time:     time.Now().UTC().Unix(),
+		priority: 100,
+	}
+	return j, nil
+}
+
+func createAndSaveTestJob() (*Job, error) {
+	j, err := createTestJob()
+	if err != nil {
+		return nil, err
+	}
+	if err := j.save(); err != nil {
+		return nil, fmt.Errorf("Unexpected error in j.save(): %s", err.Error())
+	}
+	return j, nil
 }
 
 func assertJobFieldEquals(t *testing.T, j *Job, fieldName string, expected interface{}, converter replyConverter) {
@@ -95,4 +136,23 @@ func assertJobInSet(t *testing.T, j *Job, setName string) {
 	}
 	// If we reached here, we did not find the job we were looking for
 	t.Errorf("job:%s was not found in set %s", j.id, setName)
+}
+
+func assertJobNotInSet(t *testing.T, j *Job, setName string) {
+	conn := redisPool.Get()
+	defer conn.Close()
+	gotIds, err := redis.Values(conn.Do("ZRANGEBYSCORE", setName, j.priority, j.priority))
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err.Error())
+	}
+	for _, id := range gotIds {
+		idBytes, ok := id.([]byte)
+		if !ok {
+			t.Errorf("Could not convert job id of type %T to string!", id)
+		}
+		if string(idBytes) == j.id {
+			// We found the job, but it wasn't supposed to be here!
+			t.Errorf("job:%s was found in set %s but expected it to be removed", j.id, setName)
+		}
+	}
 }

@@ -38,7 +38,7 @@ func RegisterJobType(name string, handler interface{}) (*JobType, error) {
 		return nil, fmt.Errorf("zazu: in RegisterNewJobType, handler must be a function. Got %T", handler)
 	}
 	if handlerType.NumIn() > 1 {
-		return nil, fmt.Errorf("zazu: in RegisterNewJobTyp, handler must accept 0 or 1 arguments. Got %d.", handlerType.NumIn())
+		return nil, fmt.Errorf("zazu: in RegisterNewJobType, handler must accept 0 or 1 arguments. Got %d.", handlerType.NumIn())
 	}
 	jobType := &JobType{
 		name:    name,
@@ -51,10 +51,34 @@ func RegisterJobType(name string, handler interface{}) (*JobType, error) {
 	return jobType, nil
 }
 
-func (j *JobType) String() string {
-	return j.name
+func (jt *JobType) String() string {
+	return jt.name
 }
 
-func (j *JobType) Enqueue(data interface{}, priority int, time time.Time) (*Job, error) {
-	return nil, nil
+func (jt *JobType) Enqueue(priority int, time time.Time, data interface{}) (*Job, error) {
+	// Check the type of data
+	dataType := reflect.TypeOf(data)
+	if dataType != jt.dataType {
+		return nil, fmt.Errorf("zazu: in Enqueue, provided data was not of the correct type.\nExpected %s as specified in RegisterJobType, but got %s", jt.dataType, dataType)
+	}
+	// Encode the data
+	encodedData, err := encode(data)
+	if err != nil {
+		return nil, fmt.Errorf("zazu: in Enqueue, error encoding data: %s", err.Error())
+	}
+	// Create and save the job
+	job := &Job{
+		data:     encodedData,
+		typ:      jt,
+		time:     time.UTC().Unix(),
+		priority: priority,
+	}
+	if err := job.save(); err != nil {
+		return nil, err
+	}
+	// Set the status to queued
+	if err := job.setStatus(StatusQueued); err != nil {
+		return nil, err
+	}
+	return job, nil
 }

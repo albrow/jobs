@@ -126,6 +126,9 @@ func (wp *workerPoolType) Wait() {
 // it finds any, sends them through the jobs channel for execution
 // by some worker.
 func (wp *workerPoolType) queryLoop() error {
+	if err := wp.sendNextJobs(BatchSize); err != nil {
+		return err
+	}
 	for {
 		select {
 		case <-wp.exit:
@@ -134,18 +137,23 @@ func (wp *workerPoolType) queryLoop() error {
 			close(wp.jobs)
 			return nil
 		default:
-			// Get the next jobs from the database
-			fmt.Printf("Getting next %d jobs...\n", BatchSize)
-			jobs, err := getNextJobs(BatchSize)
-			if err != nil {
+			if err := wp.sendNextJobs(BatchSize); err != nil {
 				return err
 			}
-			// Send the jobs across the channel, where they will be picked up
-			// by exactly one worker
-			for _, job := range jobs {
-				wp.jobs <- job
-			}
 		}
+	}
+	return nil
+}
+
+func (wp *workerPoolType) sendNextJobs(n int) error {
+	jobs, err := getNextJobs(BatchSize)
+	if err != nil {
+		return err
+	}
+	// Send the jobs across the channel, where they will be picked up
+	// by exactly one worker
+	for _, job := range jobs {
+		wp.jobs <- job
 	}
 	return nil
 }

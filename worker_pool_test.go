@@ -2,8 +2,10 @@ package zazu
 
 import (
 	"reflect"
+	"runtime"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func TestGetNextJobs(t *testing.T) {
@@ -46,7 +48,7 @@ func TestGetNextJobs(t *testing.T) {
 	}
 
 	// Call getNextJobs with n = 1. We expect the one job returned to be the
-	// highpriority one
+	// highpriority one, but the status should now be executing
 	jobs, err := getNextJobs(1)
 	if err != nil {
 		t.Errorf("Unexpected error from getNextJobs: %s", err.Error())
@@ -60,5 +62,46 @@ func TestGetNextJobs(t *testing.T) {
 	expectedJob.status = StatusExecuting
 	if !reflect.DeepEqual(expectedJob, gotJob) {
 		t.Errorf("Job returned by getNextJobs was incorrect.\n\tExpected: %+v\n\tBut got:  %+v", expectedJob, gotJob)
+	}
+}
+
+func TestWorkerPoolStart(t *testing.T) {
+	flushdb()
+
+	// Register some jobs which will simply set one of the values in data
+	data := make([]string, 8)
+	writeResponseJob, err := RegisterJobType("writeResponse", func(i int) {
+		data[i] = "ok"
+	})
+	if err != nil {
+		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+	}
+
+	// Queue up some jobs
+	for i := 0; i < len(data); i++ {
+		// Lower indexes have higher priority and should be completed first
+		_, err := writeResponseJob.Enqueue(8-i, time.Now(), i)
+		if err != nil {
+			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
+		}
+	}
+
+	// Start the pool with 4 workers
+	runtime.GOMAXPROCS(4)
+	NumWorkers = 4
+	BatchSize = 4
+	Pool.Start()
+
+	// Immediately stop the pool to stop the workers from doing more jobs
+	Pool.Close()
+
+	// Wait for the workers to finish
+	Pool.Wait()
+
+	// Check that the first 4 values of data were set to "ok"
+	for i := 0; i < 4; i++ {
+		if data[i] != "ok" {
+			t.Errorf(`Expected data[%d] to be set to "ok" but got: "%s"`, i, data[i])
+		}
 	}
 }

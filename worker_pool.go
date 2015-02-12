@@ -1,7 +1,6 @@
 package zazu
 
 import (
-	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"reflect"
 	"runtime"
@@ -53,16 +52,22 @@ type worker struct {
 func (w *worker) start() {
 	go func() {
 		for job := range w.jobs {
-			fmt.Printf("Worker received job: %+v\n", job)
 			// Instantiate a new variable to hold the data for this job
 			dataVal := reflect.New(job.typ.dataType)
 			if err := decode(job.data, dataVal.Interface()); err != nil {
-				// TODO send err accross a channel instead of panicking
+				// TODO: set the job status to StatusError instead of panicking
 				panic(err)
 			}
 			// Call the handler using the data we just instantiated and scanned
 			handlerVal := reflect.ValueOf(job.typ.handler)
 			handlerVal.Call([]reflect.Value{dataVal.Elem()})
+			// After we have called the handler function, mark the status as finished
+			job.Lock()
+			if err := job.setStatus(StatusFinished); err != nil {
+				// TODO: set the job status to StatusError instead of panicking
+				panic(err)
+			}
+			job.Unlock()
 		}
 		w.wg.Done()
 	}()
@@ -81,18 +86,14 @@ type workerPoolType struct {
 	// exit is used to signal the pool to stop running the query loop
 	// and close the jobs channel
 	exit chan bool
+	// sync.Mutex is used to lock when modifying attributes of the worker pool
+	// e.g. in Start()
 }
 
 // Start starts the worker pool. This means the pool will initialize workers,
 // continuously query the database for queued jobs, and delegate those jobs
 // to the workers.
 func (wp *workerPoolType) Start() {
-	go func() {
-		if err := wp.queryLoop(); err != nil {
-			// TODO: send the err accross a channel instead of panicking
-			panic(err)
-		}
-	}()
 	wp.workers = make([]*worker, NumWorkers)
 	wp.jobs = make(chan *Job, BatchSize)
 	wp.wg = &sync.WaitGroup{}
@@ -105,6 +106,12 @@ func (wp *workerPoolType) Start() {
 		worker.jobs = wp.jobs
 		worker.start()
 	}
+	go func() {
+		if err := wp.queryLoop(); err != nil {
+			// TODO: send the err accross a channel instead of panicking
+			panic(err)
+		}
+	}()
 }
 
 // Close closes the worker pool and prevents it from delegating
@@ -118,7 +125,7 @@ func (wp *workerPoolType) Close() {
 // Wait will return when all workers are done executing their jobs.
 // Wait can only possibly return after you have called Close.
 func (wp *workerPoolType) Wait() {
-	// The shared waitgropu will only return after each worker is finished
+	// The shared waitgroup will only return after each worker is finished
 	wp.wg.Wait()
 }
 
@@ -133,7 +140,6 @@ func (wp *workerPoolType) queryLoop() error {
 		select {
 		case <-wp.exit:
 			// Close the channel to tell workers to stop executing new jobs
-			fmt.Println("Recieved from exit!")
 			close(wp.jobs)
 			return nil
 		default:
@@ -222,9 +228,11 @@ func getNextJobs(n int) ([]*Job, error) {
 		job := &Job{}
 		jobs[i/2] = job
 		job.id = jobIds[i/2]
+		job.Lock()
 		if err := scanJob(reply, job); err != nil {
 			return nil, err
 		}
+		job.Unlock()
 	}
 	return jobs, nil
 }

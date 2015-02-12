@@ -126,7 +126,7 @@ func assertJobNotInSet(t *testing.T, j *Job, setName string) {
 
 func assertJobStatusEquals(t *testing.T, job *Job, expected JobStatus) {
 	if job.status != expected {
-		t.Errorf("Expected job status to be %s but got %s", expected, job.status)
+		t.Errorf("Expected jobs:%s status to be %s but got %s", job.id, expected, job.status)
 	}
 	if expected == StatusDestroyed {
 		// If the status is destroyed, we don't expect the job to be in the database

@@ -78,12 +78,14 @@ func TestWorkerPoolStart(t *testing.T) {
 	}
 
 	// Queue up some jobs
+	queuedJobs := make([]*Job, len(data))
 	for i := 0; i < len(data); i++ {
 		// Lower indexes have higher priority and should be completed first
-		_, err := writeResponseJob.Enqueue(8-i, time.Now(), i)
+		job, err := writeResponseJob.Enqueue(8-i, time.Now(), i)
 		if err != nil {
 			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
 		}
+		queuedJobs[i] = job
 	}
 
 	// Start the pool with 4 workers
@@ -99,9 +101,38 @@ func TestWorkerPoolStart(t *testing.T) {
 	Pool.Wait()
 
 	// Check that the first 4 values of data were set to "ok"
+	// This would mean that the first 4 jobs (in order of priority)
+	// were successfully executed.
 	for i := 0; i < 4; i++ {
 		if data[i] != "ok" {
 			t.Errorf(`Expected data[%d] to be set to "ok" but got: "%s"`, i, data[i])
 		}
+	}
+
+	// Make sure all the other values of data are still blank
+	for i := 4; i < len(data); i++ {
+		if data[i] != "" {
+			t.Errorf(`Expected data[%d] to be set to "" but got: "%s"`, i, data[i])
+		}
+	}
+
+	// Make sure the first four jobs we queued are marked as finished
+	for _, job := range queuedJobs[0:4] {
+		// Since we don't have a fresh copy, set the status manually. I.e. there is
+		// a difference between the reference we have to the job and what actually exists
+		// in the database. The database is what we care about.
+		// assertJobStatusEquals will check that the job is correct in the database.
+		job.status = StatusFinished
+		assertJobStatusEquals(t, job, StatusFinished)
+	}
+
+	// Make sure the next four jobs we queued are marked as queued
+	for _, job := range queuedJobs[4:] {
+		// Since we don't have a fresh copy, set the status manually. I.e. there is
+		// a difference between the reference we have to the job and what actually exists
+		// in the database. The database is what we care about.
+		// assertJobStatusEquals will check that the job is correct in the database.
+		job.status = StatusQueued
+		assertJobStatusEquals(t, job, StatusQueued)
 	}
 }

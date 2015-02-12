@@ -3,6 +3,7 @@ package zazu
 import (
 	"fmt"
 	"github.com/dchest/uniuri"
+	"github.com/garyburd/redigo/redis"
 	"strconv"
 	"time"
 )
@@ -176,6 +177,7 @@ func (j *Job) setStatus(status JobStatus) error {
 	return nil
 }
 
+// mainHashArgs returns the args for the hash which will store the job data
 func (j *Job) mainHashArgs() []interface{} {
 	hashKey := fmt.Sprintf("jobs:%s", j.id)
 	hashArgs := []interface{}{hashKey,
@@ -189,6 +191,62 @@ func (j *Job) mainHashArgs() []interface{} {
 		hashArgs = append(hashArgs, "error", j.err.Error())
 	}
 	return hashArgs
+}
+
+// scanJob scans the values of reply into job. reply should be the
+// response of an HMGET or HGETALL query.
+func scanJob(reply interface{}, job *Job) error {
+	fields, err := redis.Values(reply, nil)
+	if err != nil {
+		return err
+	}
+	if len(fields)%2 != 0 {
+		return fmt.Errorf("zazu: In scanJob: Expected length of fields to be even but got: %d", len(fields))
+	}
+	for i := 0; i < len(fields)-1; i += 2 {
+		fieldName, ok := fields[i].(string)
+		if !ok {
+			return fmt.Errorf("zazu: In scanJob: Could not convert fieldName (fields[%d] = %v) of type %T to string.", i, fields[i], fields[i])
+		}
+		fieldValue := fields[i+1]
+		switch fieldName {
+		case "data":
+			data, err := redis.Bytes(fieldValue, nil)
+			if err != nil {
+				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to []byte.", fieldName, i, fieldValue, fieldValue)
+			}
+			job.data = data
+		case "type":
+			typeName, err := redis.String(fieldValue, nil)
+			if err != nil {
+				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to string.", fieldName, i, fieldValue, fieldValue)
+			}
+			jobType, found := jobTypes[typeName]
+			if !found {
+				return fmt.Errorf("zazu: In scanJob: Could not find JobType with name = %s", typeName)
+			}
+			job.typ = jobType
+		case "time":
+			time, err := redis.Int64(fieldValue, nil)
+			if err != nil {
+				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to int64.", fieldName, i, fieldValue, fieldValue)
+			}
+			job.time = time
+		case "priority":
+			priority, ok := fieldValue.(int)
+			if !ok {
+				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to int.", fieldName, i, fieldValue, fieldValue)
+			}
+			job.priority = priority
+		case "status":
+			status, ok := fieldValue.(JobStatus)
+			if !ok {
+				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to JobStatus.", fieldName, i, fieldValue, fieldValue)
+			}
+			job.status = status
+		}
+	}
+	return nil
 }
 
 // generateRandomId generates a random string that is more or less

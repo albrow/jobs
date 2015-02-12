@@ -1,6 +1,7 @@
 package zazu
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -150,5 +151,20 @@ func testJobStatePaths(t *testing.T, statePaths []statePath) {
 			}
 		}
 		assertJobStatusEquals(t, job, statePath.expected)
+	}
+}
+
+func TestJobScanReply(t *testing.T) {
+	job, err := createTestJob()
+	if err != nil {
+		t.Errorf("Unexpected error: %s")
+	}
+	replies := job.mainHashArgs()[1:]
+	jobCopy := &Job{id: job.id}
+	if err := scanJob(replies, jobCopy); err != nil {
+		t.Errorf("Unexpected error: %s", err)
+	}
+	if !reflect.DeepEqual(job, jobCopy) {
+		t.Errorf("Result of scanJob was incorrect.\n\tExpected %+v\n\tbut got  %+v", job, jobCopy)
 	}
 }

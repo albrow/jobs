@@ -204,8 +204,8 @@ func scanJob(reply interface{}, job *Job) error {
 		return fmt.Errorf("zazu: In scanJob: Expected length of fields to be even but got: %d", len(fields))
 	}
 	for i := 0; i < len(fields)-1; i += 2 {
-		fieldName, ok := fields[i].(string)
-		if !ok {
+		fieldName, err := redis.String(fields[i], nil)
+		if err != nil {
 			return fmt.Errorf("zazu: In scanJob: Could not convert fieldName (fields[%d] = %v) of type %T to string.", i, fields[i], fields[i])
 		}
 		fieldValue := fields[i+1]
@@ -233,17 +233,17 @@ func scanJob(reply interface{}, job *Job) error {
 			}
 			job.time = time
 		case "priority":
-			priority, ok := fieldValue.(int)
-			if !ok {
+			priority, err := redis.Int(fieldValue, nil)
+			if err != nil {
 				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to int.", fieldName, i, fieldValue, fieldValue)
 			}
 			job.priority = priority
 		case "status":
-			status, ok := fieldValue.(JobStatus)
-			if !ok {
+			status, err := redis.String(fieldValue, nil)
+			if err != nil {
 				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to JobStatus.", fieldName, i, fieldValue, fieldValue)
 			}
-			job.status = status
+			job.status = JobStatus(status)
 		}
 	}
 	return nil

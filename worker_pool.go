@@ -2,6 +2,7 @@ package zazu
 
 import (
 	"fmt"
+	"github.com/garyburd/redigo/redis"
 	"runtime"
 	"sync"
 	"time"
@@ -105,4 +106,75 @@ func (wp *workerPoolType) Wait() {
 // by some worker.
 func (wp *workerPoolType) queryLoop() {
 	// TODO: implement this
+}
+
+func getNextJobs(n int) ([]*Job, error) {
+	// TODO: use lua scripting here to preserve absolute atomicity
+	// TODO: take into account the time parameter
+	conn := redisPool.Get()
+	defer conn.Close()
+	// Start the first transaction, which gets the job ids
+	if err := conn.Send("MULTI"); err != nil {
+		return nil, err
+	}
+	// Get the next n jobs from the queued set
+	if err := conn.Send("ZREVRANGE", "jobs:"+StatusQueued, 0, n-1); err != nil {
+		return nil, err
+	}
+	// Remove them
+	if err := conn.Send("ZREMRANGEBYRANK", "jobs:"+StatusQueued, -n, -1); err != nil {
+		return nil, err
+	}
+	// Execute the transaction
+	reply, err := conn.Do("EXEC")
+	if err != nil {
+		return nil, err
+	}
+	// Parse the replies. The first one is what we care about, the ids of the jobs
+	// we grabbed from the queued set
+	replies, err := redis.Values(reply, nil)
+	if err != nil {
+		return nil, err
+	}
+	jobIds, err := redis.Strings(replies[0], nil)
+	if err != nil {
+		return nil, err
+	}
+	// Start the second transaction, which gets all the other data for the job ids we have
+	if err := conn.Send("MULTI"); err != nil {
+		return nil, err
+	}
+	for _, jobId := range jobIds {
+		// Add a command to set the status to executing
+		if err := conn.Send("HSET", "jobs:"+jobId, "status", string(StatusExecuting)); err != nil {
+			return nil, err
+		}
+		// Add a command to get the job fields from its hash in the database
+		if err := conn.Send("HGETALL", "jobs:"+jobId); err != nil {
+			return nil, err
+		}
+	}
+	// Execute the transaction
+	reply, err = conn.Do("EXEC")
+	if err != nil {
+		return nil, err
+	}
+	// Parse the replies.
+	replies, err = redis.Values(reply, nil)
+	if err != nil {
+		return nil, err
+	}
+	jobs := make([]*Job, len(jobIds))
+	// We expect every odd reply to be the field data for a given job corresponding to an HGETALL command
+	// Recall that the even replies were from commands to set the job status corresponding to an HSET command
+	for i := 0; i < len(replies)-1; i += 2 {
+		reply := replies[i+1]
+		job := &Job{}
+		jobs[i/2] = job
+		job.id = jobIds[i/2]
+		if err := scanJob(reply, job); err != nil {
+			return nil, err
+		}
+	}
+	return jobs, nil
 }

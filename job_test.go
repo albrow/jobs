@@ -155,11 +155,17 @@ func testJobStatePaths(t *testing.T, statePaths []statePath) {
 }
 
 func TestJobScanReply(t *testing.T) {
-	job, err := createTestJob()
+	flushdb()
+	job, err := createAndSaveTestJob()
 	if err != nil {
 		t.Errorf("Unexpected error: %s")
 	}
-	replies := job.mainHashArgs()[1:]
+	conn := redisPool.Get()
+	defer conn.Close()
+	replies, err := conn.Do("HGETALL", "jobs:"+job.id)
+	if err != nil {
+		t.Errorf("Unexpected error in HGETALL: %s", err.Error())
+	}
 	jobCopy := &Job{id: job.id}
 	if err := scanJob(replies, jobCopy); err != nil {
 		t.Errorf("Unexpected error: %s", err)

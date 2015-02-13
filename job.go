@@ -79,6 +79,10 @@ func (j *Job) save() error {
 	if err := conn.Send("HMSET", j.mainHashArgs()...); err != nil {
 		return err
 	}
+	// Add the job to the time index
+	if err := conn.Send("ZADD", "jobs:time", j.time, j.id); err != nil {
+		return err
+	}
 	// Execute the transaction
 	if _, err := conn.Do("EXEC"); err != nil {
 		return err

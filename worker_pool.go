@@ -62,12 +62,10 @@ func (w *worker) start() {
 			handlerVal := reflect.ValueOf(job.typ.handler)
 			handlerVal.Call([]reflect.Value{dataVal.Elem()})
 			// After we have called the handler function, mark the status as finished
-			job.Lock()
 			if err := job.setStatus(StatusFinished); err != nil {
 				// TODO: set the job status to StatusError instead of panicking
 				panic(err)
 			}
-			job.Unlock()
 		}
 		w.wg.Done()
 	}()

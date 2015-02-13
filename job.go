@@ -5,7 +5,6 @@ import (
 	"github.com/dchest/uniuri"
 	"github.com/garyburd/redigo/redis"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -17,7 +16,6 @@ type Job struct {
 	time     int64
 	priority int
 	err      error
-	sync.Mutex
 }
 
 type JobStatus string

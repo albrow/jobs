@@ -169,16 +169,52 @@ func getNextJobs(n int) ([]*Job, error) {
 	// TODO: take into account the time parameter
 	conn := redisPool.Get()
 	defer conn.Close()
-	// Start the first transaction, which gets the job ids
+	// First get the ids of jobs which are currently ready to execute based on
+	// their time parameter.
+	currentTime := time.Now().UTC().UnixNano()
+	timeReadyJobIds, err := redis.Values(conn.Do("ZRANGEBYSCORE", "jobs:time", "-inf", currentTime))
+	if err != nil {
+		return nil, err
+	}
+	// If no jobs are ready based on their time, just return
+	if len(timeReadyJobIds) == 0 {
+		return nil, nil
+	}
+	// Start the first transaction, which gets the ids of jobs which are ready to execute
+	// based on their time parameter whether or not they are in the queued set.
 	if err := conn.Send("MULTI"); err != nil {
 		return nil, err
 	}
-	// Get the next n jobs from the queued set
-	if err := conn.Send("ZREVRANGE", "jobs:"+StatusQueued, 0, n-1); err != nil {
+	// Store the ids from the time index query in their own temporary set
+	// We'll create our first temporary set here, but other temporary sets follow
+	// the same pattern. We give it a readable key plus a random id to ensure there
+	// are no collisions between this and other worker pools on separate machines.
+	jobsReadyByTimeKey := "jobs:readyByTime:" + generateRandomId()
+	args := redis.Args{jobsReadyByTimeKey}
+	for _, jobId := range timeReadyJobIds {
+		args = args.Add(0, jobId)
+	}
+	if err := conn.Send("ZADD", args...); err != nil {
 		return nil, err
 	}
-	// Remove them
+	// Intersect the jobs which are ready based on their time with those in the
+	// queued set, use the WEIGHTS paramater in redis to sort by priority. Store
+	// the results in a temporary set.
+	jobsReadyAndSortedKey := "jobs:readyAndSorted:" + generateRandomId()
+	if err := conn.Send("ZINTERSTORE", jobsReadyAndSortedKey, 2, "jobs:"+StatusQueued, jobsReadyByTimeKey, "WEIGHTS", 1, 0); err != nil {
+		return nil, err
+	}
+	// Get n jobs from the jobs:readyAndSorted set, which contains the jobs that are ready
+	// based on their time parameter sorted by priority.
+	if err := conn.Send("ZREVRANGE", jobsReadyAndSortedKey, 0, n-1); err != nil {
+		return nil, err
+	}
+	// Remove the jobs from the queued set
 	if err := conn.Send("ZREMRANGEBYRANK", "jobs:"+StatusQueued, -n, -1); err != nil {
+		return nil, err
+	}
+	// Delete the temporary sets we created for intersecting
+	if err := conn.Send("DEL", jobsReadyByTimeKey, jobsReadyAndSortedKey); err != nil {
 		return nil, err
 	}
 	// Execute the transaction
@@ -192,7 +228,7 @@ func getNextJobs(n int) ([]*Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	jobIds, err := redis.Strings(replies[0], nil)
+	jobIds, err := redis.Strings(replies[2], nil)
 	if err != nil {
 		return nil, err
 	}

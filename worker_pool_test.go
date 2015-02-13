@@ -53,13 +53,14 @@ func TestGetNextJobs(t *testing.T) {
 	}
 	if len(jobs) != 1 {
 		t.Errorf("Length of jobs was incorrect. Expected 1 but got %d", len(jobs))
-	}
-	gotJob := jobs[0]
-	expectedJob := &Job{}
-	(*expectedJob) = *highPriorityJob
-	expectedJob.status = StatusExecuting
-	if !reflect.DeepEqual(expectedJob, gotJob) {
-		t.Errorf("Job returned by getNextJobs was incorrect.\n\tExpected: %+v\n\tBut got:  %+v", expectedJob, gotJob)
+	} else {
+		gotJob := jobs[0]
+		expectedJob := &Job{}
+		(*expectedJob) = *highPriorityJob
+		expectedJob.status = StatusExecuting
+		if !reflect.DeepEqual(expectedJob, gotJob) {
+			t.Errorf("Job returned by getNextJobs was incorrect.\n\tExpected: %+v\n\tBut got:  %+v", expectedJob, gotJob)
+		}
 	}
 }
 
@@ -106,18 +107,10 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 	// Check that the first 4 values of data were set to "ok"
 	// This would mean that the first 4 jobs (in order of priority)
 	// were successfully executed.
-	for i, datum := range data[0:4] {
-		if datum != "ok" {
-			t.Errorf(`Expected data[%d] to be set to "ok" but got: "%s"`, i, datum)
-		}
-	}
+	assertTestDataOk(t, data[:4])
 
 	// Make sure all the other values of data are still blank
-	for i, datum := range data[4:] {
-		if datum != "" {
-			t.Errorf(`Expected data[%d] to be set to "" but got: "%s"`, i, datum)
-		}
-	}
+	assertTestDataBlank(t, data[4:])
 
 	// Make sure the first four jobs we queued are marked as finished
 	for _, job := range queuedJobs[0:4] {
@@ -203,7 +196,8 @@ func TestAllJobsExecuted(t *testing.T) {
 		Pool.Wait()
 	}()
 
-	// Register some jobs which will simply increment one of the values in data
+	// Register some jobs which will simply set one of the elements in
+	// data to "ok"
 	data := make([]string, 100)
 	setStringJob, err := RegisterJobType("setString", func(i int) {
 		data[i] = "ok"
@@ -250,6 +244,100 @@ func TestAllJobsExecuted(t *testing.T) {
 				// Each item in data was set to "ok", so all the jobs were executed correctly.
 				return
 			}
+		}
+	}
+}
+
+// TestJobsAreNotExecutedUntilTime sets up a few jobs with a time parameter in the future
+// Then it makes sure that those jobs are not executed until after that time.
+func TestJobsAreNotExecutedUntilTime(t *testing.T) {
+	flushdb()
+	jobTypes = map[string]*JobType{}
+
+	defer func() {
+		// Close the pool and wait for workers to finish
+		Pool.Close()
+		Pool.Wait()
+	}()
+
+	// Register some jobs which will set one of the elements in data
+	// For this test, we want to execute two jobs at a time, so we'll
+	// use a waitgroup.
+	data := make([]string, 4)
+	setStringJob, err := RegisterJobType("setString", func(i int) {
+		data[i] = "ok"
+	})
+	if err != nil {
+		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+	}
+
+	// Queue up some jobs with a time parameter in the future
+	currentTime := time.Now()
+	timeDiff := 200 * time.Millisecond
+	futureTime := currentTime.Add(timeDiff)
+	for i := 0; i < len(data); i++ {
+		if _, err := setStringJob.Enqueue(100, futureTime, i); err != nil {
+			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
+		}
+	}
+
+	// Start the pool with 4 workers
+	runtime.GOMAXPROCS(4)
+	NumWorkers = 4
+	BatchSize = 4
+	Pool.Start()
+
+	// Continuously check the data every 10 milliseconds. Eventually
+	// we hope to see that everything was set to "ok". We will check that
+	// this condition is only true after futureTime has been reached, since
+	// the jobs should not be executed before then.
+	timeout := time.After(1 * time.Second)
+	interval := time.Tick(10 * time.Millisecond)
+	remainingJobs := len(data)
+	for {
+		select {
+		case <-timeout:
+			// More than 1 second has passed. Assume something went wrong.
+			t.Errorf("1 second passed and %d jobs were not executed.", remainingJobs)
+			break
+		case <-interval:
+			// Count the number of elements in data that equal "ok".
+			// Anything that doesn't equal ok represents a job that hasn't been executed yet
+			remainingJobs = len(data)
+			for _, datum := range data {
+				if datum == "ok" {
+					remainingJobs -= 1
+				}
+			}
+			if remainingJobs == 0 {
+				// Each item in data was set to "ok", so all the jobs were executed correctly.
+				// Check that this happend after futureTime
+				if time.Now().Before(futureTime) {
+					t.Errorf("jobs were executed before their time parameter was reached.")
+				}
+				return
+			}
+		}
+	}
+}
+
+// assertTestDataOk reports an error if any elements in data do not equal "ok". It is only used for
+// tests in this file. Many of the tests use a slice of strings as data and queue up jobs to set one
+// of the elements to "ok", so this makes checking them easier.
+func assertTestDataOk(t *testing.T, data []string) {
+	for i, datum := range data {
+		if datum != "ok" {
+			t.Errorf("Expected data[%d] to be \"ok\" but got: \"%s\"\ndata was: %v.", i, datum, data)
+		}
+	}
+}
+
+// assertTestDataBlank is like assertTestDataOk except it does the opposite. It reports an error if any
+// of the elements in data were not blank.
+func assertTestDataBlank(t *testing.T, data []string) {
+	for i, datum := range data {
+		if datum != "" {
+			t.Errorf("Expected data[%d] to be \"\" but got: \"%s\"\ndata was: %v.", i, datum, data)
 		}
 	}
 }

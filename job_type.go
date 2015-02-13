@@ -70,7 +70,7 @@ func (jt *JobType) Enqueue(priority int, time time.Time, data interface{}) (*Job
 	job := &Job{
 		data:     encodedData,
 		typ:      jt,
-		time:     time.UTC().Unix(),
+		time:     time.UTC().UnixNano(),
 		priority: priority,
 	}
 	if err := job.save(); err != nil {

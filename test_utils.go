@@ -31,7 +31,7 @@ func createTestJob() (*Job, error) {
 		id:       "testJob",
 		data:     []byte("testData"),
 		typ:      jobType,
-		time:     time.Now().UTC().Unix(),
+		time:     time.Now().UTC().UnixNano(),
 		priority: 100,
 	}
 	return j, nil

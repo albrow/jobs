@@ -57,7 +57,7 @@ func TestJobTypeEnqueue(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error encoding data: %s", err)
 	}
-	encodedTime := testJobTime.UTC().Unix()
+	encodedTime := testJobTime.UTC().UnixNano()
 	jobType, err := RegisterJobType(testJobName, func(string) {})
 	if err != nil {
 		t.Errorf("Unexpected error registering job type: %s", err)

@@ -121,6 +121,9 @@ func (j *Job) Destroy() error {
 	setKey := fmt.Sprintf("jobs:%s", j.status)
 	args := redis.Args{setKey, j.id}
 	t.command("ZREM", args, nil)
+	// Remove the job from the time index
+	args = redis.Args{"jobs:time", j.id}
+	t.command("ZREM", args, nil)
 	// Execute the transaction
 	if err := t.exec(); err != nil {
 		return err

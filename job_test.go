@@ -1,7 +1,6 @@
 package zazu
 
 import (
-	"github.com/garyburd/redigo/redis"
 	"reflect"
 	"testing"
 )
@@ -25,19 +24,7 @@ func TestJobSave(t *testing.T) {
 	assertJobStatusEquals(t, job, StatusSaved)
 
 	// Make sure the job was indexed by its time correctly
-	conn := redisPool.Get()
-	defer conn.Close()
-	ids, err := redis.Strings(conn.Do("ZRANGEBYSCORE", "jobs:time", job.time, job.time))
-	if err != nil {
-		t.Errorf("Unexpected error from ZRANGEBYSCORE: %s", err.Error())
-	}
-	if len(ids) == 0 {
-		t.Errorf("job:%s was not added to the time index", job.id)
-	} else if len(ids) != 1 {
-		t.Errorf("Expected one job to be added to the time index, but got %d", len(ids))
-	} else if ids[0] != job.id {
-		t.Errorf("job id in time index was incorrect. Expected %s but got %s", job.id, ids[0])
-	}
+	assertJobInTimeIndex(t, job)
 }
 
 func TestJobEnqueue(t *testing.T) {

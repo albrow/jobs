@@ -84,19 +84,16 @@ var (
 	}
 )
 
-func assertJobInSet(t *testing.T, j *Job, setName string) {
+func assertJobInStatusSet(t *testing.T, j *Job, status JobStatus) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	gotIds, err := redis.Values(conn.Do("ZRANGEBYSCORE", setName, j.priority, j.priority))
+	setName := "jobs:" + status
+	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", setName, j.priority, j.priority))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
 	for _, id := range gotIds {
-		idBytes, ok := id.([]byte)
-		if !ok {
-			t.Errorf("Could not convert job id of type %T to string!", id)
-		}
-		if string(idBytes) == j.id {
+		if id == j.id {
 			// We found the job we were looking for
 			return
 		}
@@ -105,19 +102,50 @@ func assertJobInSet(t *testing.T, j *Job, setName string) {
 	t.Errorf("job:%s was not found in set %s", j.id, setName)
 }
 
-func assertJobNotInSet(t *testing.T, j *Job, setName string) {
+func assertJobInTimeIndex(t *testing.T, j *Job) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	gotIds, err := redis.Values(conn.Do("ZRANGEBYSCORE", setName, j.priority, j.priority))
+	setName := "jobs:time"
+	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", setName, j.time, j.time))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
 	for _, id := range gotIds {
-		idBytes, ok := id.([]byte)
-		if !ok {
-			t.Errorf("Could not convert job id of type %T to string!", id)
+		if id == j.id {
+			// We found the job we were looking for
+			return
 		}
-		if string(idBytes) == j.id {
+	}
+	// If we reached here, we did not find the job we were looking for
+	t.Errorf("job:%s was not found in set %s", j.id, setName)
+}
+
+func assertJobNotInStatusSet(t *testing.T, j *Job, status JobStatus) {
+	conn := redisPool.Get()
+	defer conn.Close()
+	setName := "jobs:" + status
+	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", setName, j.priority, j.priority))
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err.Error())
+	}
+	for _, id := range gotIds {
+		if id == j.id {
+			// We found the job, but it wasn't supposed to be here!
+			t.Errorf("job:%s was found in set %s but expected it to be removed", j.id, setName)
+		}
+	}
+}
+
+func assertJobNotInTimeIndex(t *testing.T, j *Job) {
+	conn := redisPool.Get()
+	defer conn.Close()
+	setName := "jobs:time"
+	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", setName, j.time, j.time))
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err.Error())
+	}
+	for _, id := range gotIds {
+		if id == j.id {
 			// We found the job, but it wasn't supposed to be here!
 			t.Errorf("job:%s was found in set %s but expected it to be removed", j.id, setName)
 		}
@@ -135,15 +163,14 @@ func assertJobStatusEquals(t *testing.T, job *Job, expected JobStatus) {
 	} else {
 		// For every status other status, we expect the job to be in the database
 		for _, status := range possibleStatuses {
-			setName := string("jobs:" + status)
 			if status == expected {
 				// Make sure the job hash has the correct status
-				assertJobInSet(t, job, setName)
+				assertJobInStatusSet(t, job, status)
 				// Make sure the job is in the correct set
 				assertJobFieldEquals(t, job, "status", string(status), stringConverter)
 			} else {
 				// Make sure the job is not in any other set
-				assertJobNotInSet(t, job, setName)
+				assertJobNotInStatusSet(t, job, status)
 			}
 		}
 	}
@@ -152,9 +179,9 @@ func assertJobStatusEquals(t *testing.T, job *Job, expected JobStatus) {
 func assertJobDestroyed(t *testing.T, job *Job) {
 	// Make sure the main hash is gone
 	assertKeyNotExists(t, "jobs:"+job.id)
+	assertJobNotInTimeIndex(t, job)
 	for _, status := range possibleStatuses {
-		setName := string("jobs:" + status)
-		assertJobNotInSet(t, job, setName)
+		assertJobNotInStatusSet(t, job, status)
 	}
 }
 

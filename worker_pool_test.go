@@ -12,12 +12,6 @@ import (
 // TestNextJobs tests the getNextJobs function, which queries the database to find
 // the next queued jobs, in order of their priority.
 func TestGetNextJobs(t *testing.T) {
-	// TODO: consider edge cases and make this test more rigorous.
-	// e.g.:
-	// 	1. What happens when there are no queued jobs?
-	//		2. What happens when n > len(queued jobs)?
-	//		3. Is the job status correct at every stage?
-	//		4. Is a given job gauranteed to only be returned by getNextJobs() once?
 	flushdb()
 	jobTypes = map[string]*JobType{}
 

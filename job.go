@@ -55,29 +55,33 @@ func (j *Job) Error() error {
 // save writes the job to the database but does not enqueue it. If you want to add it
 // to the queue, use the Enqueue method after save.
 func (j *Job) save() error {
-	// Generate id if needed
-	if j.id == "" {
-		j.id = generateRandomId()
-	}
-	// Create a new transaction
 	t := newTransaction()
-	// Add the Job to the saved set
-	if j.status == "" {
-		j.status = StatusSaved
-		setKey := fmt.Sprintf("jobs:%s", j.status)
-		args := redis.Args{setKey, j.priority, j.id}
-		t.command("ZADD", args, nil)
-	}
-	// Add the Job attributes to a hash
-	t.command("HMSET", j.mainHashArgs(), nil)
-	// Add the job to the time index
-	args := redis.Args{"jobs:time", j.time, j.id}
-	t.command("ZADD", args, nil)
-	// Execute the transaction
+	t.saveJob(j)
 	if err := t.exec(); err != nil {
 		return err
 	}
 	return nil
+}
+
+// saveJob adds commands to the transaction to set all the fields for the main hash for the job,
+// add the job to the time index, and, if necessary, move the job to the saved status set. It will
+// also mutate the job by 1) generating an id if the id is empty and 2) setting the status to StatusSaved
+// if the status is empty.
+func (t *transaction) saveJob(job *Job) {
+	// Generate id if needed
+	if job.id == "" {
+		job.id = generateRandomId()
+	}
+	// Set status to saved if needed
+	if job.status == "" {
+		job.status = StatusSaved
+		t.addJobToStatusSet(job, StatusSaved)
+	}
+	// Add the Job attributes to a hash
+	t.command("HMSET", job.mainHashArgs(), nil)
+	// Add the job to the time index
+	args := redis.Args{"jobs:time", job.time, job.id}
+	t.command("ZADD", args, nil)
 }
 
 // Enqueue adds the job to the queue and sets its status to StatusQueued. Queued jobs will
@@ -139,27 +143,47 @@ func (j *Job) setStatus(status JobStatus) error {
 	if j.status == StatusDestroyed {
 		return fmt.Errorf("zazu: Cannot set job:%s status to %s because it was destroyed.", j.id, status)
 	}
-	// Start a new transaction
-	t := newTransaction()
-	// Set the job status in the hash
-	hashKey := fmt.Sprintf("jobs:%s", j.id)
-	args := redis.Args{hashKey, "status", status}
-	t.command("HSET", args, nil)
-	// Remove from the old set
 	oldStatus := j.status
-	oldSetKey := fmt.Sprintf("jobs:%s", oldStatus)
-	args = redis.Args{oldSetKey, j.id}
-	t.command("ZREM", args, nil)
-	// Add to the new set
-	newSetKey := fmt.Sprintf("jobs:%s", status)
-	args = redis.Args{newSetKey, j.priority, j.id}
-	t.command("ZADD", args, nil)
-	// Execute the transaction
+	j.status = status
+	// Use a transaction to move the job to the appropriate status
+	t := newTransaction()
+	t.setJobStatus(j, oldStatus, status)
 	if err := t.exec(); err != nil {
 		return err
 	}
 	j.status = status
 	return nil
+}
+
+// setJobStatus adds commands to the transaction which will set the status field
+// in the main hash for the job and move it to the appropriate status set
+func (t *transaction) setJobStatus(job *Job, oldStatus, newStatus JobStatus) {
+	args := redis.Args{"jobs:" + job.id, "status", string(newStatus)}
+	t.command("HSET", args, nil)
+	t.moveJobToStatusSet(job, oldStatus, newStatus)
+}
+
+// moveJobToStatusSet adds commands to the transaction which will remove the
+// job from it's old status set and add it to the new status set
+func (t *transaction) moveJobToStatusSet(job *Job, oldStatus, newStatus JobStatus) {
+	t.addJobToStatusSet(job, newStatus)
+	t.removeJobFromStatusSet(job, oldStatus)
+}
+
+// addJobtoStatusSet adds commands to the transaction which will add
+// the job to the status set corresponding to status
+func (t *transaction) addJobToStatusSet(job *Job, status JobStatus) {
+	setKey := fmt.Sprintf("jobs:%s", status)
+	args := redis.Args{setKey, job.priority, job.id}
+	t.command("ZADD", args, nil)
+}
+
+// removeJobFromStatusSet adds commands to the transaction which will remove
+// the job from the status set corresponding to status
+func (t *transaction) removeJobFromStatusSet(job *Job, status JobStatus) {
+	setKey := fmt.Sprintf("jobs:%s", status)
+	args := redis.Args{setKey, job.id}
+	t.command("ZREM", args, nil)
 }
 
 // mainHashArgs returns the args for the hash which will store the job data

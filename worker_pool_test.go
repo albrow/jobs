@@ -64,6 +64,68 @@ func TestGetNextJobs(t *testing.T) {
 	}
 }
 
+func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
+	flushdb()
+	jobTypes = map[string]*JobType{}
+
+	defer func() {
+		// Close the pool and wait for workers to finish
+		Pool.Close()
+		Pool.Wait()
+	}()
+
+	// Register some jobs which will set the value of some string index,
+	// signal the wait group, and then wait for an exit signal before closing.
+	// waitForJobs is a wait group which will wait for each job to set their string
+	waitForJobs := sync.WaitGroup{}
+	// jobsCanExit signals all jobs to exit when closed
+	jobsCanExit := make(chan bool)
+	data := make([]string, 4)
+	setStringJob, err := RegisterJobType("setString", func(i int) {
+		data[i] = "ok"
+		waitForJobs.Done()
+		// Wait for the signal before returning from this function
+		for range jobsCanExit {
+		}
+	})
+	if err != nil {
+		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+	}
+
+	// Queue up some jobs
+	queuedJobs := make([]*Job, len(data))
+	for i := 0; i < len(data); i++ {
+		waitForJobs.Add(1)
+		job, err := setStringJob.Enqueue(100, time.Now(), i)
+		if err != nil {
+			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
+		}
+		queuedJobs[i] = job
+	}
+
+	// Start the pool with 4 workers
+	runtime.GOMAXPROCS(4)
+	NumWorkers = 4
+	BatchSize = 4
+	Pool.Start()
+
+	// Wait for the jobs to finish setting their data
+	waitForJobs.Wait()
+
+	// At this point, we expect the status of all jobs to be executing.
+	for _, job := range queuedJobs {
+		// Since we don't have a fresh copy, set the status manually. I.e. there is
+		// a difference between the reference we have to the job and what actually exists
+		// in the database. The database is what we care about.
+		// assertJobStatusEquals will check that the job is correct in the database.
+		job.status = StatusExecuting
+		assertJobStatusEquals(t, job, StatusExecuting)
+	}
+
+	// Signal that the jobs can now exit
+	close(jobsCanExit)
+}
+
 // TestJobsWithHigherPriorityExecutedFirst creates two sets of jobs: one with lower priorities
 // and one with higher priorities. Then it starts the worker pool and runs for exactly one iteration.
 // Then it makes sure that the jobs with higher priorities were executed, and the lower priority ones

@@ -65,12 +65,12 @@ func TestGetNextJobs(t *testing.T) {
 	}
 }
 
-func TestWorkerPoolStart(t *testing.T) {
+func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 	flushdb()
 
 	// Register some jobs which will simply set one of the values in data
 	data := make([]string, 8)
-	writeResponseJob, err := RegisterJobType("writeResponse", func(i int) {
+	setStringJob, err := RegisterJobType("setString", func(i int) {
 		data[i] = "ok"
 	})
 	if err != nil {
@@ -81,7 +81,7 @@ func TestWorkerPoolStart(t *testing.T) {
 	queuedJobs := make([]*Job, len(data))
 	for i := 0; i < len(data); i++ {
 		// Lower indexes have higher priority and should be completed first
-		job, err := writeResponseJob.Enqueue(8-i, time.Now(), i)
+		job, err := setStringJob.Enqueue(8-i, time.Now(), i)
 		if err != nil {
 			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
 		}
@@ -103,16 +103,16 @@ func TestWorkerPoolStart(t *testing.T) {
 	// Check that the first 4 values of data were set to "ok"
 	// This would mean that the first 4 jobs (in order of priority)
 	// were successfully executed.
-	for i := 0; i < 4; i++ {
-		if data[i] != "ok" {
-			t.Errorf(`Expected data[%d] to be set to "ok" but got: "%s"`, i, data[i])
+	for i, datum := range data[0:4] {
+		if datum != "ok" {
+			t.Errorf(`Expected data[%d] to be set to "ok" but got: "%s"`, i, datum)
 		}
 	}
 
 	// Make sure all the other values of data are still blank
-	for i := 4; i < len(data); i++ {
-		if data[i] != "" {
-			t.Errorf(`Expected data[%d] to be set to "" but got: "%s"`, i, data[i])
+	for i, datum := range data[4:] {
+		if datum != "" {
+			t.Errorf(`Expected data[%d] to be set to "" but got: "%s"`, i, datum)
 		}
 	}
 
@@ -134,5 +134,49 @@ func TestWorkerPoolStart(t *testing.T) {
 		// assertJobStatusEquals will check that the job is correct in the database.
 		job.status = StatusQueued
 		assertJobStatusEquals(t, job, StatusQueued)
+	}
+}
+
+func TestJobsOnlyExecutedOnce(t *testing.T) {
+	flushdb()
+
+	// Register some jobs which will simply increment one of the values in data
+	data := make([]int, 4)
+	incrementJob, err := RegisterJobType("increment", func(i int) {
+		data[i] += 1
+	})
+	if err != nil {
+		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+	}
+
+	// Queue up some jobs
+	queuedJobs := make([]*Job, len(data))
+	for i := 0; i < len(data); i++ {
+		// Lower indexes have higher priority and should be completed first
+		job, err := incrementJob.Enqueue(100, time.Now(), i)
+		if err != nil {
+			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
+		}
+		queuedJobs[i] = job
+	}
+
+	// Start the pool with 4 workers
+	runtime.GOMAXPROCS(4)
+	NumWorkers = 4
+	BatchSize = 4
+	Pool.Start()
+
+	// Immediately stop the pool to stop the workers from doing more jobs
+	Pool.Close()
+
+	// Wait for the workers to finish
+	Pool.Wait()
+
+	// Check that each value in data equals 1.
+	// This would mean that each job was only executed once
+	for i, datum := range data {
+		if datum != 1 {
+			t.Errorf(`Expected data[%d] to be 1 but got: %d`, i, datum)
+		}
 	}
 }

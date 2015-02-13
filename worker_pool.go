@@ -166,7 +166,6 @@ func (wp *workerPoolType) sendNextJobs(n int) error {
 
 func getNextJobs(n int) ([]*Job, error) {
 	// TODO: use lua scripting here to preserve absolute atomicity
-	// TODO: take into account the time parameter
 	conn := redisPool.Get()
 	defer conn.Close()
 	// First get the ids of jobs which are currently ready to execute based on
@@ -176,15 +175,14 @@ func getNextJobs(n int) ([]*Job, error) {
 	if err != nil {
 		return nil, err
 	}
+	conn.Close()
 	// If no jobs are ready based on their time, just return
 	if len(timeReadyJobIds) == 0 {
 		return nil, nil
 	}
 	// Start the first transaction, which gets the ids of jobs which are ready to execute
 	// based on their time parameter whether or not they are in the queued set.
-	if err := conn.Send("MULTI"); err != nil {
-		return nil, err
-	}
+	t0 := newTransaction()
 	// Store the ids from the time index query in their own temporary set
 	// We'll create our first temporary set here, but other temporary sets follow
 	// the same pattern. We give it a readable key plus a random id to ensure there
@@ -194,81 +192,45 @@ func getNextJobs(n int) ([]*Job, error) {
 	for _, jobId := range timeReadyJobIds {
 		args = args.Add(0, jobId)
 	}
-	if err := conn.Send("ZADD", args...); err != nil {
-		return nil, err
-	}
+	t0.command("ZADD", args, nil)
 	// Intersect the jobs which are ready based on their time with those in the
 	// queued set, use the WEIGHTS paramater in redis to sort by priority. Store
 	// the results in a temporary set.
 	jobsReadyAndSortedKey := "jobs:readyAndSorted:" + generateRandomId()
-	if err := conn.Send("ZINTERSTORE", jobsReadyAndSortedKey, 2, "jobs:"+StatusQueued, jobsReadyByTimeKey, "WEIGHTS", 1, 0); err != nil {
-		return nil, err
-	}
+	args = redis.Args{jobsReadyAndSortedKey, 2, "jobs:" + StatusQueued, jobsReadyByTimeKey}
+	t0.command("ZINTERSTORE", args, nil)
 	// Get n jobs from the jobs:readyAndSorted set, which contains the jobs that are ready
 	// based on their time parameter sorted by priority.
-	if err := conn.Send("ZREVRANGE", jobsReadyAndSortedKey, 0, n-1); err != nil {
-		return nil, err
-	}
+	jobIds := []string{}
+	args = redis.Args{jobsReadyAndSortedKey, 0, n - 1}
+	t0.command("ZREVRANGE", args, newScanStringsHandler(&jobIds))
 	// Remove the jobs from the queued set
-	if err := conn.Send("ZREMRANGEBYRANK", "jobs:"+StatusQueued, -n, -1); err != nil {
-		return nil, err
-	}
+	args = redis.Args{"jobs:" + StatusQueued, -n, -1}
+	t0.command("ZREMRANGEBYRANK", args, nil)
 	// Delete the temporary sets we created for intersecting
-	if err := conn.Send("DEL", jobsReadyByTimeKey, jobsReadyAndSortedKey); err != nil {
-		return nil, err
-	}
+	args = redis.Args{jobsReadyByTimeKey, jobsReadyAndSortedKey}
+	t0.command("DEL", args, nil)
 	// Execute the transaction
-	reply, err := conn.Do("EXEC")
-	if err != nil {
+	if err := t0.exec(); err != nil {
 		return nil, err
 	}
-	// Parse the replies. The first one is what we care about, the ids of the jobs
-	// we grabbed from the queued set
-	replies, err := redis.Values(reply, nil)
-	if err != nil {
-		return nil, err
-	}
-	jobIds, err := redis.Strings(replies[2], nil)
-	if err != nil {
-		return nil, err
-	}
+	// fmt.Printf("job ids: %v\n", jobIds)
 	// Start the second transaction, which gets all the other data for the job ids we have
-	if err := conn.Send("MULTI"); err != nil {
-		return nil, err
-	}
+	t1 := newTransaction()
+	jobs := []*Job{}
 	for _, jobId := range jobIds {
 		// Add a command to set the status to executing
-		if err := conn.Send("HSET", "jobs:"+jobId, "status", string(StatusExecuting)); err != nil {
-			return nil, err
-		}
+		args := redis.Args{"jobs:" + jobId, "status", string(StatusExecuting)}
+		t1.command("HSET", args, nil)
 		// Add a command to get the job fields from its hash in the database
-		if err := conn.Send("HGETALL", "jobs:"+jobId); err != nil {
-			return nil, err
-		}
+		job := &Job{id: jobId}
+		args = redis.Args{"jobs:" + jobId}
+		t1.command("HGETALL", args, newScanJobHandler(job))
+		jobs = append(jobs, job)
 	}
 	// Execute the transaction
-	reply, err = conn.Do("EXEC")
-	if err != nil {
+	if err := t1.exec(); err != nil {
 		return nil, err
-	}
-	// Parse the replies.
-	replies, err = redis.Values(reply, nil)
-	if err != nil {
-		return nil, err
-	}
-	jobs := make([]*Job, len(jobIds))
-	// We expect every odd reply to be the field data for a given job corresponding to an HGETALL command
-	// Recall that the even replies were from commands to set the job status corresponding to an HSET command
-	for i := 0; i < len(replies)-1; i += 2 {
-		reply := replies[i+1]
-		job := &Job{}
-		jobs[i/2] = job
-		job.id = jobIds[i/2]
-		job.Lock()
-		if err := scanJob(reply, job); err != nil {
-			return nil, err
-		}
-		job.Unlock()
 	}
 	return jobs, nil
 }

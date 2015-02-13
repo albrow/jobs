@@ -61,30 +61,22 @@ func (j *Job) save() error {
 	if j.id == "" {
 		j.id = generateRandomId()
 	}
-	// Get redis conn from the pool and start transaction
-	conn := redisPool.Get()
-	defer conn.Close()
-	if err := conn.Send("MULTI"); err != nil {
-		return err
-	}
+	// Create a new transaction
+	t := newTransaction()
 	// Add the Job to the saved set
 	if j.status == "" {
 		j.status = StatusSaved
 		setKey := fmt.Sprintf("jobs:%s", j.status)
-		if err := conn.Send("ZADD", setKey, j.priority, j.id); err != nil {
-			return err
-		}
+		args := redis.Args{setKey, j.priority, j.id}
+		t.command("ZADD", args, nil)
 	}
 	// Add the Job attributes to a hash
-	if err := conn.Send("HMSET", j.mainHashArgs()...); err != nil {
-		return err
-	}
+	t.command("HMSET", j.mainHashArgs(), nil)
 	// Add the job to the time index
-	if err := conn.Send("ZADD", "jobs:time", j.time, j.id); err != nil {
-		return err
-	}
+	args := redis.Args{"jobs:time", j.time, j.id}
+	t.command("ZADD", args, nil)
 	// Execute the transaction
-	if _, err := conn.Do("EXEC"); err != nil {
+	if err := t.exec(); err != nil {
 		return err
 	}
 	return nil
@@ -121,23 +113,16 @@ func (j *Job) Destroy() error {
 	if j.id == "" {
 		return fmt.Errorf("zazu: Cannot destroy job that doesn't have an id.")
 	}
-	// Get a redis conn from the pool and start transaction
-	conn := redisPool.Get()
-	defer conn.Close()
-	if err := conn.Send("MULTI"); err != nil {
-		return err
-	}
+	// Start a new transaction
+	t := newTransaction()
 	// Remove the job hash
-	if err := conn.Send("DEL", j.mainHashArgs()[0]); err != nil {
-		return err
-	}
-	// Remove the job from the index
+	t.command("DEL", j.mainHashArgs()[0:1], nil)
+	// Remove the job from the set it is currently in
 	setKey := fmt.Sprintf("jobs:%s", j.status)
-	if err := conn.Send("ZREM", setKey, j.id); err != nil {
-		return err
-	}
+	args := redis.Args{setKey, j.id}
+	t.command("ZREM", args, nil)
 	// Execute the transaction
-	if _, err := conn.Do("EXEC"); err != nil {
+	if err := t.exec(); err != nil {
 		return err
 	}
 	j.status = StatusDestroyed
@@ -153,30 +138,23 @@ func (j *Job) setStatus(status JobStatus) error {
 	if j.status == StatusDestroyed {
 		return fmt.Errorf("zazu: Cannot set job:%s status to %s because it was destroyed.", j.id, status)
 	}
-	// Get redis conn from the pool and start transaction
-	conn := redisPool.Get()
-	defer conn.Close()
-	if err := conn.Send("MULTI"); err != nil {
-		return err
-	}
+	// Start a new transaction
+	t := newTransaction()
 	// Set the job status in the hash
 	hashKey := fmt.Sprintf("jobs:%s", j.id)
-	if err := conn.Send("HSET", hashKey, "status", status); err != nil {
-		return err
-	}
+	args := redis.Args{hashKey, "status", status}
+	t.command("HSET", args, nil)
 	// Remove from the old set
 	oldStatus := j.status
 	oldSetKey := fmt.Sprintf("jobs:%s", oldStatus)
-	if err := conn.Send("ZREM", oldSetKey, j.id); err != nil {
-		return err
-	}
+	args = redis.Args{oldSetKey, j.id}
+	t.command("ZREM", args, nil)
 	// Add to the new set
 	newSetKey := fmt.Sprintf("jobs:%s", status)
-	if err := conn.Send("ZADD", newSetKey, j.priority, j.id); err != nil {
-		return err
-	}
+	args = redis.Args{newSetKey, j.priority, j.id}
+	t.command("ZADD", args, nil)
 	// Execute the transaction
-	if _, err := conn.Do("EXEC"); err != nil {
+	if err := t.exec(); err != nil {
 		return err
 	}
 	j.status = status

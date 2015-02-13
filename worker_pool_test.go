@@ -4,10 +4,13 @@ import (
 	"reflect"
 	"runtime"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
 
+// TestNextJobs tests the getNextJobs function, which queries the database to find
+// the next queued jobs, in order of their priority.
 func TestGetNextJobs(t *testing.T) {
 	// TODO: consider edge cases and make this test more rigorous.
 	// e.g.:
@@ -16,6 +19,7 @@ func TestGetNextJobs(t *testing.T) {
 	//		3. Is the job status correct at every stage?
 	//		4. Is a given job gauranteed to only be returned by getNextJobs() once?
 	flushdb()
+	jobTypes = map[string]*JobType{}
 
 	// Create a test job with high priority
 	highPriorityJob, err := createTestJob()
@@ -65,8 +69,13 @@ func TestGetNextJobs(t *testing.T) {
 	}
 }
 
+// TestJobsWithHigherPriorityExecutedFirst creates two sets of jobs: one with lower priorities
+// and one with higher priorities. Then it starts the worker pool and runs for exactly one iteration.
+// Then it makes sure that the jobs with higher priorities were executed, and the lower priority ones
+// were not.
 func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 	flushdb()
+	jobTypes = map[string]*JobType{}
 
 	// Register some jobs which will simply set one of the values in data
 	data := make([]string, 8)
@@ -137,27 +146,30 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 	}
 }
 
+// TestJobsOnlyExecutedOnce creates a few jobs that increment a counter (each job
+// has its own counter). Then it starts the pool and runs the query loop for at most two
+// iterations. Then it checks that each job was executed only once by observing the counters.
 func TestJobsOnlyExecutedOnce(t *testing.T) {
 	flushdb()
+	jobTypes = map[string]*JobType{}
 
 	// Register some jobs which will simply increment one of the values in data
 	data := make([]int, 4)
+	waitForJobs := sync.WaitGroup{}
 	incrementJob, err := RegisterJobType("increment", func(i int) {
 		data[i] += 1
+		waitForJobs.Done()
 	})
 	if err != nil {
 		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
 	}
 
 	// Queue up some jobs
-	queuedJobs := make([]*Job, len(data))
 	for i := 0; i < len(data); i++ {
-		// Lower indexes have higher priority and should be completed first
-		job, err := incrementJob.Enqueue(100, time.Now(), i)
-		if err != nil {
+		waitForJobs.Add(1)
+		if _, err := incrementJob.Enqueue(100, time.Now(), i); err != nil {
 			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
 		}
-		queuedJobs[i] = job
 	}
 
 	// Start the pool with 4 workers
@@ -166,9 +178,10 @@ func TestJobsOnlyExecutedOnce(t *testing.T) {
 	BatchSize = 4
 	Pool.Start()
 
-	// Immediately stop the pool to stop the workers from doing more jobs
+	// Wait for the wait group, which tells us each job was executed at least once
+	waitForJobs.Wait()
+	// Close the pool, allowing for a max of one more iteration
 	Pool.Close()
-
 	// Wait for the workers to finish
 	Pool.Wait()
 
@@ -177,6 +190,72 @@ func TestJobsOnlyExecutedOnce(t *testing.T) {
 	for i, datum := range data {
 		if datum != 1 {
 			t.Errorf(`Expected data[%d] to be 1 but got: %d`, i, datum)
+		}
+	}
+}
+
+// TestAllJobsExecuted creates many more jobs than workers. Then it starts
+// the pool and continuously checks if every job was executed, it which case
+// it exits successfully. If some of the jobs have not been executed after 1
+// second, it breaks and reports an error. 1 second should be plenty of time
+// to execute the jobs.
+func TestAllJobsExecuted(t *testing.T) {
+	flushdb()
+	jobTypes = map[string]*JobType{}
+
+	defer func() {
+		// Close the pool and wait for workers to finish
+		Pool.Close()
+		Pool.Wait()
+	}()
+
+	// Register some jobs which will simply increment one of the values in data
+	data := make([]string, 100)
+	setStringJob, err := RegisterJobType("setString", func(i int) {
+		data[i] = "ok"
+	})
+	if err != nil {
+		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+	}
+
+	// Queue up some jobs
+	for i := 0; i < len(data); i++ {
+		if _, err := setStringJob.Enqueue(100, time.Now(), i); err != nil {
+			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
+		}
+	}
+
+	// Start the pool with 4 workers
+	runtime.GOMAXPROCS(4)
+	NumWorkers = 4
+	BatchSize = 4
+	Pool.Start()
+
+	// Continuously check the data every 10 milliseconds. Eventually
+	// we hope to see that everything was set to "ok". If 1 second has
+	// passed, assume something went wrong.
+	timeout := time.After(1 * time.Second)
+	interval := time.Tick(10 * time.Millisecond)
+	remainingJobs := len(data)
+	for {
+		select {
+		case <-timeout:
+			// More than 1 second has passed. Assume something went wrong.
+			t.Errorf("1 second passed and %d jobs were not executed.", remainingJobs)
+			break
+		case <-interval:
+			// Count the number of elements in data that equal "ok".
+			// Anything that doesn't equal ok represents a job that hasn't been executed yet
+			remainingJobs = len(data)
+			for _, datum := range data {
+				if datum == "ok" {
+					remainingJobs -= 1
+				}
+			}
+			if remainingJobs == 0 {
+				// Each item in data was set to "ok", so all the jobs were executed correctly.
+				return
+			}
 		}
 	}
 }

@@ -21,14 +21,20 @@ type Job struct {
 type JobStatus string
 
 const (
-	StatusSaved     = "saved"
-	StatusQueued    = "queued"
-	StatusExecuting = "executing"
-	StatusFinished  = "finished"
-	StatusError     = "error"
-	StatusCancelled = "cancelled"
-	StatusDestroyed = "destroyed"
+	StatusSaved     JobStatus = "saved"
+	StatusQueued    JobStatus = "queued"
+	StatusExecuting JobStatus = "executing"
+	StatusFinished  JobStatus = "finished"
+	StatusError     JobStatus = "error"
+	StatusCancelled JobStatus = "cancelled"
+	StatusDestroyed JobStatus = "destroyed"
 )
+
+// key returns the key used for the sorted set in redis which will hold
+// all jobs with this status.
+func (status JobStatus) key() string {
+	return "jobs:" + string(status)
+}
 
 var possibleStatuses = []JobStatus{
 	StatusSaved,
@@ -120,8 +126,7 @@ func (j *Job) Destroy() error {
 	// Remove the job hash
 	t.command("DEL", j.mainHashArgs()[0:1], nil)
 	// Remove the job from the set it is currently in
-	setKey := fmt.Sprintf("jobs:%s", j.status)
-	args := redis.Args{setKey, j.id}
+	args := redis.Args{j.status.key(), j.id}
 	t.command("ZREM", args, nil)
 	// Remove the job from the time index
 	args = redis.Args{"jobs:time", j.id}
@@ -173,16 +178,14 @@ func (t *transaction) moveJobToStatusSet(job *Job, oldStatus, newStatus JobStatu
 // addJobtoStatusSet adds commands to the transaction which will add
 // the job to the status set corresponding to status
 func (t *transaction) addJobToStatusSet(job *Job, status JobStatus) {
-	setKey := fmt.Sprintf("jobs:%s", status)
-	args := redis.Args{setKey, job.priority, job.id}
+	args := redis.Args{status.key(), job.priority, job.id}
 	t.command("ZADD", args, nil)
 }
 
 // removeJobFromStatusSet adds commands to the transaction which will remove
 // the job from the status set corresponding to status
 func (t *transaction) removeJobFromStatusSet(job *Job, status JobStatus) {
-	setKey := fmt.Sprintf("jobs:%s", status)
-	args := redis.Args{setKey, job.id}
+	args := redis.Args{status.key(), job.id}
 	t.command("ZREM", args, nil)
 }
 

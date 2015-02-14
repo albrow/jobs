@@ -206,10 +206,10 @@ func getNextJobs(n int) ([]*Job, error) {
 	args = redis.Args{jobsReadyAndSortedKey, 0, -1}
 	t0.command("ZREVRANGE", args, newScanStringsHandler(&jobIds))
 	// Add the jobs to the executing set using ZUNIONINTERSTORE
-	args = redis.Args{"jobs:" + StatusExecuting, 2, jobsReadyAndSortedKey, "jobs:" + StatusExecuting}
+	args = redis.Args{StatusExecuting.key(), 2, jobsReadyAndSortedKey, "jobs:" + StatusExecuting}
 	t0.command("ZUNIONSTORE", args, nil)
 	// Remove the jobs from the queued set
-	args = redis.Args{"jobs:" + StatusQueued, -n, -1}
+	args = redis.Args{StatusQueued.key(), -n, -1}
 	t0.command("ZREMRANGEBYRANK", args, nil)
 	// Delete the temporary sets we created for intersecting
 	args = redis.Args{jobsReadyByTimeKey, jobsReadyAndSortedKey}

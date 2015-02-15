@@ -169,7 +169,7 @@ func getNextJobs(n int) ([]*Job, error) {
 	// First get the ids of jobs which are currently ready to execute based on
 	// their time parameter.
 	currentTime := time.Now().UTC().UnixNano()
-	timeReadyJobIds, err := redis.Values(conn.Do("ZRANGEBYSCORE", "jobs:time", "-inf", currentTime))
+	timeReadyJobIds, err := redis.Values(conn.Do("ZRANGEBYSCORE", keys.jobsTimeIndex, "-inf", currentTime))
 	if err != nil {
 		return nil, err
 	}
@@ -181,11 +181,8 @@ func getNextJobs(n int) ([]*Job, error) {
 	// Start the first transaction, which gets the ids of jobs which are ready to execute
 	// based on their time parameter whether or not they are in the queued set.
 	t0 := newTransaction()
-	// Store the ids from the time index query in their own temporary set
-	// We'll create our first temporary set here, but other temporary sets follow
-	// the same pattern. We give it a readable key plus a random id to ensure there
-	// are no collisions between this and other worker pools on separate machines.
-	jobsReadyByTimeKey := "jobs:readyByTime:" + generateRandomId()
+	// Store the ids from the time index query in their own temporary set, which has a unique name
+	jobsReadyByTimeKey := jobsReadyByTime.generateKey()
 	args := redis.Args{jobsReadyByTimeKey}
 	for _, jobId := range timeReadyJobIds {
 		args = args.Add(0, jobId)
@@ -193,7 +190,7 @@ func getNextJobs(n int) ([]*Job, error) {
 	t0.command("ZADD", args, nil)
 	// Intersect the jobs which are ready based on their time with those in the
 	// queued set. Store the results in a temporary set.
-	jobsReadyAndSortedKey := "jobs:readyAndSorted:" + generateRandomId()
+	jobsReadyAndSortedKey := jobsReadyAndSorted.generateKey()
 	args = redis.Args{jobsReadyAndSortedKey, 2, StatusQueued.key(), jobsReadyByTimeKey}
 	t0.command("ZINTERSTORE", args, nil)
 	// Trim the jobs:readyAndSorted set, so it contains only the first n jobs ordered by

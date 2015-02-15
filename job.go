@@ -92,7 +92,7 @@ func (t *transaction) saveJob(job *Job) {
 	// Add the Job attributes to a hash
 	t.command("HMSET", job.mainHashArgs(), nil)
 	// Add the job to the time index
-	args := redis.Args{"jobs:time", job.time, job.id}
+	args := redis.Args{keys.jobsTimeIndex, job.time, job.id}
 	t.command("ZADD", args, nil)
 }
 
@@ -130,12 +130,12 @@ func (j *Job) Destroy() error {
 	// Start a new transaction
 	t := newTransaction()
 	// Remove the job hash
-	t.command("DEL", j.key(), nil)
+	t.command("DEL", redis.Args{j.key()}, nil)
 	// Remove the job from the set it is currently in
 	args := redis.Args{j.status.key(), j.id}
 	t.command("ZREM", args, nil)
 	// Remove the job from the time index
-	args = redis.Args{"jobs:time", j.id}
+	args = redis.Args{keys.jobsTimeIndex, j.id}
 	t.command("ZREM", args, nil)
 	// Execute the transaction
 	if err := t.exec(); err != nil {

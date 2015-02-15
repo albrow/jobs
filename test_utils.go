@@ -103,8 +103,7 @@ func assertJobInStatusSet(t *testing.T, j *Job, status JobStatus) {
 func assertJobInTimeIndex(t *testing.T, j *Job) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	setName := "jobs:time"
-	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", setName, j.time, j.time))
+	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", keys.jobsTimeIndex, j.time, j.time))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
@@ -115,7 +114,7 @@ func assertJobInTimeIndex(t *testing.T, j *Job) {
 		}
 	}
 	// If we reached here, we did not find the job we were looking for
-	t.Errorf("job:%s was not found in set %s", j.id, setName)
+	t.Errorf("job:%s was not found in set %s", j.id, keys.jobsTimeIndex)
 }
 
 func assertJobNotInStatusSet(t *testing.T, j *Job, status JobStatus) {
@@ -136,15 +135,14 @@ func assertJobNotInStatusSet(t *testing.T, j *Job, status JobStatus) {
 func assertJobNotInTimeIndex(t *testing.T, j *Job) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	setName := "jobs:time"
-	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", setName, j.time, j.time))
+	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", keys.jobsTimeIndex, j.time, j.time))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
 	for _, id := range gotIds {
 		if id == j.id {
 			// We found the job, but it wasn't supposed to be here!
-			t.Errorf("job:%s was found in set %s but expected it to be removed", j.id, setName)
+			t.Errorf("job:%s was found in set %s but expected it to be removed", j.id, keys.jobsTimeIndex)
 		}
 	}
 }

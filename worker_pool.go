@@ -52,6 +52,15 @@ type worker struct {
 func (w *worker) start() {
 	go func() {
 		for job := range w.jobs {
+			// Set the started field and save the job
+			job.started = time.Now().UTC().UnixNano()
+			t0 := newTransaction()
+			args0 := redis.Args{job.key(), "started", job.started}
+			t0.command("HSET", args0, nil)
+			if err := t0.exec(); err != nil {
+				// TODO: set the job status to StatusError instead of panicking
+				panic(err)
+			}
 			// Instantiate a new variable to hold the data for this job
 			dataVal := reflect.New(job.typ.dataType)
 			if err := decode(job.data, dataVal.Interface()); err != nil {
@@ -62,7 +71,13 @@ func (w *worker) start() {
 			handlerVal := reflect.ValueOf(job.typ.handler)
 			handlerVal.Call([]reflect.Value{dataVal.Elem()})
 			// After we have called the handler function, mark the status as finished
-			if err := job.setStatus(StatusFinished); err != nil {
+			// and set the finished timestamp
+			job.finished = time.Now().UTC().UnixNano()
+			t1 := newTransaction()
+			args1 := redis.Args{job.key(), "finished", job.finished}
+			t1.command("HSET", args1, nil)
+			t1.setJobStatus(job, job.status, StatusFinished)
+			if err := t1.exec(); err != nil {
 				// TODO: set the job status to StatusError instead of panicking
 				panic(err)
 			}

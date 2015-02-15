@@ -1,6 +1,7 @@
 package zazu
 
 import (
+	"github.com/garyburd/redigo/redis"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -383,6 +384,55 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 	}
 }
 
+// TestJobTimestamps creates and executes a job, then tests that the started and finished
+// values were correct.
+func TestJobTimestamps(t *testing.T) {
+	flushdb()
+	jobTypes = map[string]*JobType{}
+
+	// Register a job type which will do nothing but sleep for some duration
+	sleepJob, err := RegisterJobType("sleep", func(d time.Duration) {
+		time.Sleep(d)
+	})
+	if err != nil {
+		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+	}
+
+	// Queue up a single job
+	sleepDuration := 10 * time.Millisecond
+	job, err := sleepJob.Enqueue(100, time.Now(), sleepDuration)
+	if err != nil {
+		t.Errorf("Unexpected error in sleepJob.Enqueue(): %s", err.Error())
+	}
+
+	// Start the pool with 1 worker
+	runtime.GOMAXPROCS(1)
+	NumWorkers = 1
+	BatchSize = 1
+	poolStarted := time.Now()
+	Pool.Start()
+
+	// Immediately stop the pool and wait for workers to finish
+	Pool.Close()
+	Pool.Wait()
+	poolClosed := time.Now()
+
+	// Update our copy of the job
+	tx := newTransaction()
+	tx.command("HGETALL", redis.Args{job.key()}, newScanJobHandler(job))
+	if err := tx.exec(); err != nil {
+		t.Errorf("Unexpected error in HGETALL: %s", err.Error())
+	}
+
+	// Make sure that the timestamps are correct
+	assertTimeNotZero(t, job.Started())
+	assertTimeBetween(t, job.Started(), poolClosed, poolStarted)
+	assertTimeNotZero(t, job.Finished())
+	assertTimeBetween(t, job.Finished(), poolClosed, poolStarted)
+	assertDurationNotZero(t, job.Duration())
+	assertDurationBetween(t, job.Duration(), sleepDuration, poolClosed.Sub(poolStarted))
+}
+
 // assertTestDataOk reports an error if any elements in data do not equal "ok". It is only used for
 // tests in this file. Many of the tests use a slice of strings as data and queue up jobs to set one
 // of the elements to "ok", so this makes checking them easier.
@@ -401,5 +451,39 @@ func assertTestDataBlank(t *testing.T, data []string) {
 		if datum != "" {
 			t.Errorf("Expected data[%d] to be \"\" but got: \"%s\"\ndata was: %v.", i, datum, data)
 		}
+	}
+}
+
+// assertTimeNotZero reports an error if x is equal to the zero time.
+func assertTimeNotZero(t *testing.T, x time.Time) {
+	if x.IsZero() {
+		t.Errorf("Expected time x to be non-zero but got zero.")
+	}
+}
+
+// assertTimeBetween reports an error if x is not before and after the given times.
+func assertTimeBetween(t *testing.T, x, before, after time.Time) {
+	if !x.Before(before) {
+		t.Errorf("time x was incorrect. Expected it to be before %v but got %v.", before, x)
+	}
+	if !x.After(after) {
+		t.Errorf("time x was incorrect. Expected it to be after %v but got %v.", after, x)
+	}
+}
+
+// assertDurationNotZero reports an error if d is equal to zero.
+func assertDurationNotZero(t *testing.T, d time.Duration) {
+	if d.Nanoseconds() == 0 {
+		t.Errorf("Expected duration d to be non-zero but got zero.")
+	}
+}
+
+// assertDurationBetween reports an error if d is not more than min and less than max.
+func assertDurationBetween(t *testing.T, d, min, max time.Duration) {
+	if !(d > min) {
+		t.Errorf("duration d was incorrect. Expected it to be more than %v but got %v.", min, d)
+	}
+	if !(d < max) {
+		t.Errorf("duration d was incorrect. Expected it to be less than %v but got %v.", max, d)
 	}
 }

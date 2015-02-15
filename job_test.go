@@ -34,6 +34,41 @@ func TestJobSave(t *testing.T) {
 	assertJobInTimeIndex(t, job)
 }
 
+func TestJobRefresh(t *testing.T) {
+	flushdb()
+
+	// Create and save a job
+	job, err := createAndSaveTestJob()
+	if err != nil {
+		t.Errorf("Unexpected error: %s")
+	}
+
+	// Get a copy of that job directly from database
+	jobCopy := &Job{}
+	tx := newTransaction()
+	tx.scanJobById(job.id, jobCopy)
+	if err := tx.exec(); err != nil {
+		t.Errorf("Unexpected error in tx.exec(): %s", err.Error())
+	}
+
+	// Modify and save the copy
+	newPriority := jobCopy.priority + 100
+	jobCopy.priority = newPriority
+	if err := jobCopy.save(); err != nil {
+		t.Errorf("Unexpected error in jobCopy.save(): %s", err.Error())
+	}
+
+	// Refresh the original job
+	if err := job.Refresh(); err != nil {
+		t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
+	}
+
+	// Now the original and the copy should b equal
+	if !reflect.DeepEqual(job, jobCopy) {
+		t.Errorf("Expected job to equal jobCopy but it did not.\n\tExpected %+v\n\tBut got  %+v", jobCopy, job)
+	}
+}
+
 func TestJobEnqueue(t *testing.T) {
 	// Run through a set of possible state paths and make sure the result is
 	// always what we expect

@@ -1,7 +1,6 @@
 package zazu
 
 import (
-	"github.com/garyburd/redigo/redis"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -115,11 +114,10 @@ func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 
 	// At this point, we expect the status of all jobs to be executing.
 	for _, job := range queuedJobs {
-		// Since we don't have a fresh copy, set the status manually. I.e. there is
-		// a difference between the reference we have to the job and what actually exists
-		// in the database. The database is what we care about.
-		// assertJobStatusEquals will check that the job is correct in the database.
-		job.status = StatusExecuting
+		// Refresh the job and make sure its status is correct
+		if err := job.Refresh(); err != nil {
+			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
+		}
 		assertJobStatusEquals(t, job, StatusExecuting)
 	}
 
@@ -177,21 +175,19 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 
 	// Make sure the first four jobs we queued are marked as finished
 	for _, job := range queuedJobs[0:4] {
-		// Since we don't have a fresh copy, set the status manually. I.e. there is
-		// a difference between the reference we have to the job and what actually exists
-		// in the database. The database is what we care about.
-		// assertJobStatusEquals will check that the job is correct in the database.
-		job.status = StatusFinished
+		// Refresh the job and make sure its status is correct
+		if err := job.Refresh(); err != nil {
+			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
+		}
 		assertJobStatusEquals(t, job, StatusFinished)
 	}
 
 	// Make sure the next four jobs we queued are marked as queued
 	for _, job := range queuedJobs[4:] {
-		// Since we don't have a fresh copy, set the status manually. I.e. there is
-		// a difference between the reference we have to the job and what actually exists
-		// in the database. The database is what we care about.
-		// assertJobStatusEquals will check that the job is correct in the database.
-		job.status = StatusQueued
+		// Refresh the job and make sure its status is correct
+		if err := job.Refresh(); err != nil {
+			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
+		}
 		assertJobStatusEquals(t, job, StatusQueued)
 	}
 }
@@ -418,10 +414,8 @@ func TestJobTimestamps(t *testing.T) {
 	poolClosed := time.Now()
 
 	// Update our copy of the job
-	tx := newTransaction()
-	tx.command("HGETALL", redis.Args{job.key()}, newScanJobHandler(job))
-	if err := tx.exec(); err != nil {
-		t.Errorf("Unexpected error in HGETALL: %s", err.Error())
+	if err := job.Refresh(); err != nil {
+		t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 	}
 
 	// Make sure that the timestamps are correct

@@ -239,8 +239,7 @@ func getNextJobs(n int) ([]*Job, error) {
 		args := redis.Args{job.key(), "status", string(StatusExecuting)}
 		t1.command("HSET", args, nil)
 		// Add a command to get the job fields from its hash in the database
-		args = redis.Args{job.key()}
-		t1.command("HGETALL", args, newScanJobHandler(job))
+		t1.scanJobById(job.id, job)
 		jobs = append(jobs, job)
 	}
 	// Execute the transaction

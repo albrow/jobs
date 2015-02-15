@@ -130,6 +130,18 @@ func (t *transaction) saveJob(job *Job) {
 	t.command("ZADD", args, nil)
 }
 
+// Refresh mutates the job by setting its fields to the most recent data
+// found in the database. It returns an error if there was a problem connecting
+// to the database or if the job was destroyed.
+func (j *Job) Refresh() error {
+	t := newTransaction()
+	t.scanJobById(j.id, j)
+	if err := t.exec(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Enqueue adds the job to the queue and sets its status to StatusQueued. Queued jobs will
 // be completed by workers in order of priority.
 func (j *Job) Enqueue() error {
@@ -315,6 +327,14 @@ func scanJob(reply interface{}, job *Job) error {
 		}
 	}
 	return nil
+}
+
+// scanJobById adds commands and a reply handler to the transaction which, when run,
+// will scan the values of the job corresponding to id into job. It does not execute
+// the transaction.
+func (t *transaction) scanJobById(id string, job *Job) {
+	job.id = id
+	t.command("HGETALL", redis.Args{job.key()}, newScanJobHandler(job))
 }
 
 // generateRandomId generates a random string that is more or less

@@ -125,6 +125,42 @@ func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 	close(jobsCanExit)
 }
 
+// TestExecuteJobWithNoArguments registers and executes a job without any
+// arguments and then checks that it executed correctly.
+func TestExecuteJobWithNoArguments(t *testing.T) {
+	flushdb()
+	jobTypes = map[string]*JobType{}
+
+	// Register a job type with a handler that expects 0 arguments
+	data := ""
+	setOkayJob, err := RegisterJobType("setOkay", func() {
+		data = "ok"
+	})
+	if err != nil {
+		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+	}
+
+	// Queue up a single job
+	if _, err := setOkayJob.Enqueue(100, time.Now(), nil); err != nil {
+		t.Errorf("Unexpected error in Enqueue(): %s", err.Error())
+	}
+
+	// Start the pool with 1 worker
+	NumWorkers = 1
+	BatchSize = 1
+	Pool.Start()
+
+	// Immediately close the pool and wait for workers to finish
+	Pool.Close()
+	Pool.Wait()
+
+	// Make sure that data was set to "ok", indicating that the job executed
+	// successfully.
+	if data != "ok" {
+		t.Errorf("Expected data to be \"ok\" but got \"%s\", indicating the job did not execute successfully.", data)
+	}
+}
+
 // TestJobsWithHigherPriorityExecutedFirst creates two sets of jobs: one with lower priorities
 // and one with higher priorities. Then it starts the worker pool and runs for exactly one iteration.
 // Then it makes sure that the jobs with higher priorities were executed, and the lower priority ones

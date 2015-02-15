@@ -26,6 +26,9 @@ func decode(reply []byte, dest interface{}) error {
 }
 
 func encode(data interface{}) ([]byte, error) {
+	if data == nil {
+		return nil, nil
+	}
 	buf := bytes.NewBuffer([]byte{})
 	enc := gob.NewEncoder(buf)
 	if err := enc.Encode(data); err != nil {

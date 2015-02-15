@@ -61,15 +61,20 @@ func (w *worker) start() {
 				// TODO: set the job status to StatusError instead of panicking
 				panic(err)
 			}
-			// Instantiate a new variable to hold the data for this job
-			dataVal := reflect.New(job.typ.dataType)
-			if err := decode(job.data, dataVal.Interface()); err != nil {
-				// TODO: set the job status to StatusError instead of panicking
-				panic(err)
+			// Use reflection to instantiate arguments for the handler
+			args := []reflect.Value{}
+			if job.typ.dataType != nil {
+				// Instantiate a new variable to hold this argument
+				dataVal := reflect.New(job.typ.dataType)
+				if err := decode(job.data, dataVal.Interface()); err != nil {
+					// TODO: set the job status to StatusError instead of panicking
+					panic(err)
+				}
+				args = append(args, dataVal.Elem())
 			}
-			// Call the handler using the data we just instantiated and scanned
+			// Call the handler using the arguments we just instantiated
 			handlerVal := reflect.ValueOf(job.typ.handler)
-			handlerVal.Call([]reflect.Value{dataVal.Elem()})
+			handlerVal.Call(args)
 			// After we have called the handler function, mark the status as finished
 			// and set the finished timestamp
 			job.finished = time.Now().UTC().UnixNano()

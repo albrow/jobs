@@ -36,6 +36,14 @@ func (status JobStatus) key() string {
 	return "jobs:" + string(status)
 }
 
+// Count returns the number of jobs that currently have the given status
+// or an error if there was a problem connecting to the database.
+func (status JobStatus) Count() (int, error) {
+	conn := redisPool.Get()
+	defer conn.Close()
+	return redis.Int(conn.Do("ZCARD", status.key()))
+}
+
 var possibleStatuses = []JobStatus{
 	StatusSaved,
 	StatusQueued,
@@ -153,6 +161,9 @@ func (j *Job) setStatus(status JobStatus) error {
 	}
 	if j.status == StatusDestroyed {
 		return fmt.Errorf("zazu: Cannot set job:%s status to %s because it was destroyed.", j.id, status)
+	}
+	if j.status == status {
+		return nil
 	}
 	oldStatus := j.status
 	j.status = status

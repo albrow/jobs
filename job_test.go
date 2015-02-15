@@ -9,9 +9,14 @@ func TestJobSave(t *testing.T) {
 	flushdb()
 
 	// Create and save a test job
-	job, err := createAndSaveTestJob()
+	job, err := createTestJob()
 	if err != nil {
 		t.Error(err)
+	}
+	job.started = 1
+	job.finished = 5
+	if err := job.save(); err != nil {
+		t.Errorf("Unexpected error saving job: %s", err.Error())
 	}
 
 	// Make sure the main hash was saved correctly
@@ -19,6 +24,8 @@ func TestJobSave(t *testing.T) {
 	assertJobFieldEquals(t, job, "type", job.typ.name, stringConverter)
 	assertJobFieldEquals(t, job, "time", job.time, int64Converter)
 	assertJobFieldEquals(t, job, "priority", job.priority, intConverter)
+	assertJobFieldEquals(t, job, "started", job.started, int64Converter)
+	assertJobFieldEquals(t, job, "finished", job.finished, int64Converter)
 
 	// Make sure the job status was correct
 	assertJobStatusEquals(t, job, StatusSaved)

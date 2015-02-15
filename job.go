@@ -16,6 +16,8 @@ type Job struct {
 	time     int64
 	priority int
 	err      error
+	started  int64
+	finished int64
 }
 
 type JobStatus string
@@ -64,6 +66,30 @@ func (j *Job) Status() JobStatus {
 
 func (j *Job) Error() error {
 	return j.err
+}
+
+// Started returns the time that the job started executing (in local time
+// with nanosecond precision) or the zero time if the job has not started
+// executing yet.
+func (j *Job) Started() time.Time {
+	return time.Unix(0, j.started).Local()
+}
+
+// Finished returns the time that the job finished executing (in local
+// time with nanosecond precision) or the zero time if the job has not
+// finished executing yet.
+func (j *Job) Finished() time.Time {
+	return time.Unix(0, j.finished).Local()
+}
+
+// Duration returns how long the job took to execute with nanosecond
+// precision. I.e. the difference between j.Finished() and j.Started().
+// It returns a duration of zero if the job has not finished yet.
+func (j *Job) Duration() time.Duration {
+	if j.Finished().IsZero() {
+		return 0 * time.Second
+	}
+	return j.Finished().Sub(j.Started())
 }
 
 // key returns the key used for the hash in redis which stores all the
@@ -214,6 +240,8 @@ func (j *Job) mainHashArgs() []interface{} {
 		"time", j.time,
 		"priority", j.priority,
 		"status", j.status,
+		"started", j.started,
+		"finished", j.finished,
 	}
 	if j.err != nil {
 		hashArgs = append(hashArgs, "error", j.err.Error())
@@ -272,6 +300,18 @@ func scanJob(reply interface{}, job *Job) error {
 				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to JobStatus.", fieldName, i, fieldValue, fieldValue)
 			}
 			job.status = JobStatus(status)
+		case "started":
+			started, err := redis.Int64(fieldValue, nil)
+			if err != nil {
+				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to int64.", fieldName, i, fieldValue, fieldValue)
+			}
+			job.started = started
+		case "finished":
+			finished, err := redis.Int64(fieldValue, nil)
+			if err != nil {
+				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to int64.", fieldName, i, fieldValue, fieldValue)
+			}
+			job.finished = finished
 		}
 	}
 	return nil

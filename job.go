@@ -2,9 +2,7 @@ package zazu
 
 import (
 	"fmt"
-	"github.com/dchest/uniuri"
 	"github.com/garyburd/redigo/redis"
-	"strconv"
 	"time"
 )
 
@@ -373,13 +371,4 @@ func scanBytes(reply interface{}, v *[]byte) error {
 func (t *transaction) scanJobById(id string, job *Job) {
 	job.id = id
 	t.command("HGETALL", redis.Args{job.key()}, newScanJobHandler(job))
-}
-
-// generateRandomId generates a random string that is more or less
-// garunteed to be unique.
-func generateRandomId() string {
-	timeInt := time.Now().UnixNano()
-	timeString := strconv.FormatInt(timeInt, 36)
-	randomString := uniuri.NewLen(16)
-	return randomString + timeString
 }

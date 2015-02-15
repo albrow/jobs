@@ -71,7 +71,7 @@ func TestJobTypeEnqueue(t *testing.T) {
 	if job.id == "" {
 		t.Errorf("After jobType.Enqueue, job.id was empty.")
 	}
-	assertKeyExists(t, "jobs:"+job.id)
+	assertKeyExists(t, job.key())
 	assertJobFieldEquals(t, job, "priority", testJobPriority, intConverter)
 	assertJobFieldEquals(t, job, "time", encodedTime, int64Converter)
 	assertJobFieldEquals(t, job, "data", encodedData, bytesConverter)

@@ -58,6 +58,12 @@ func (j *Job) Error() error {
 	return j.err
 }
 
+// key returns the key used for the hash in redis which stores all the
+// fields for this job.
+func (j *Job) key() string {
+	return "jobs:" + j.id
+}
+
 // save writes the job to the database but does not enqueue it. If you want to add it
 // to the queue, use the Enqueue method after save.
 func (j *Job) save() error {
@@ -124,7 +130,7 @@ func (j *Job) Destroy() error {
 	// Start a new transaction
 	t := newTransaction()
 	// Remove the job hash
-	t.command("DEL", j.mainHashArgs()[0:1], nil)
+	t.command("DEL", j.key(), nil)
 	// Remove the job from the set it is currently in
 	args := redis.Args{j.status.key(), j.id}
 	t.command("ZREM", args, nil)
@@ -163,7 +169,7 @@ func (j *Job) setStatus(status JobStatus) error {
 // setJobStatus adds commands to the transaction which will set the status field
 // in the main hash for the job and move it to the appropriate status set
 func (t *transaction) setJobStatus(job *Job, oldStatus, newStatus JobStatus) {
-	args := redis.Args{"jobs:" + job.id, "status", string(newStatus)}
+	args := redis.Args{job.key(), "status", string(newStatus)}
 	t.command("HSET", args, nil)
 	t.moveJobToStatusSet(job, oldStatus, newStatus)
 }
@@ -191,8 +197,7 @@ func (t *transaction) removeJobFromStatusSet(job *Job, status JobStatus) {
 
 // mainHashArgs returns the args for the hash which will store the job data
 func (j *Job) mainHashArgs() []interface{} {
-	hashKey := fmt.Sprintf("jobs:%s", j.id)
-	hashArgs := []interface{}{hashKey,
+	hashArgs := []interface{}{j.key(),
 		"data", string(j.data),
 		"type", j.typ.name,
 		"time", j.time,

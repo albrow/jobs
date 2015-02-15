@@ -48,11 +48,10 @@ func createAndSaveTestJob() (*Job, error) {
 	return j, nil
 }
 
-func assertJobFieldEquals(t *testing.T, j *Job, fieldName string, expected interface{}, converter replyConverter) {
-	hashKey := fmt.Sprintf("jobs:%s", j.id)
+func assertJobFieldEquals(t *testing.T, job *Job, fieldName string, expected interface{}, converter replyConverter) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	got, err := conn.Do("HGET", hashKey, fieldName)
+	got, err := conn.Do("HGET", job.key(), fieldName)
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
@@ -176,7 +175,7 @@ func assertJobStatusEquals(t *testing.T, job *Job, expected JobStatus) {
 
 func assertJobDestroyed(t *testing.T, job *Job) {
 	// Make sure the main hash is gone
-	assertKeyNotExists(t, "jobs:"+job.id)
+	assertKeyNotExists(t, job.key())
 	assertJobNotInTimeIndex(t, job)
 	for _, status := range possibleStatuses {
 		assertJobNotInStatusSet(t, job, status)

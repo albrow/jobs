@@ -165,7 +165,7 @@ func TestJobScanReply(t *testing.T) {
 	}
 	conn := redisPool.Get()
 	defer conn.Close()
-	replies, err := conn.Do("HGETALL", "jobs:"+job.id)
+	replies, err := conn.Do("HGETALL", job.key())
 	if err != nil {
 		t.Errorf("Unexpected error in HGETALL: %s", err.Error())
 	}

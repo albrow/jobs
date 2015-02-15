@@ -194,7 +194,7 @@ func getNextJobs(n int) ([]*Job, error) {
 	// Intersect the jobs which are ready based on their time with those in the
 	// queued set. Store the results in a temporary set.
 	jobsReadyAndSortedKey := "jobs:readyAndSorted:" + generateRandomId()
-	args = redis.Args{jobsReadyAndSortedKey, 2, "jobs:" + StatusQueued, jobsReadyByTimeKey}
+	args = redis.Args{jobsReadyAndSortedKey, 2, StatusQueued.key(), jobsReadyByTimeKey}
 	t0.command("ZINTERSTORE", args, nil)
 	// Trim the jobs:readyAndSorted set, so it contains only the first n jobs ordered by
 	// priority
@@ -206,7 +206,7 @@ func getNextJobs(n int) ([]*Job, error) {
 	args = redis.Args{jobsReadyAndSortedKey, 0, -1}
 	t0.command("ZREVRANGE", args, newScanStringsHandler(&jobIds))
 	// Add the jobs to the executing set using ZUNIONINTERSTORE
-	args = redis.Args{StatusExecuting.key(), 2, jobsReadyAndSortedKey, "jobs:" + StatusExecuting}
+	args = redis.Args{StatusExecuting.key(), 2, jobsReadyAndSortedKey, StatusExecuting.key()}
 	t0.command("ZUNIONSTORE", args, nil)
 	// Remove the jobs from the queued set
 	args = redis.Args{StatusQueued.key(), -n, -1}
@@ -223,11 +223,11 @@ func getNextJobs(n int) ([]*Job, error) {
 	jobs := []*Job{}
 	for _, jobId := range jobIds {
 		// Add a command to set the status to executing
-		args := redis.Args{"jobs:" + jobId, "status", string(StatusExecuting)}
+		job := &Job{id: jobId}
+		args := redis.Args{job.key(), "status", string(StatusExecuting)}
 		t1.command("HSET", args, nil)
 		// Add a command to get the job fields from its hash in the database
-		job := &Job{id: jobId}
-		args = redis.Args{"jobs:" + jobId}
+		args = redis.Args{job.key()}
 		t1.command("HGETALL", args, newScanJobHandler(job))
 		jobs = append(jobs, job)
 	}

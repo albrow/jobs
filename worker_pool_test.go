@@ -107,6 +107,7 @@ func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 	runtime.GOMAXPROCS(4)
 	Config.Pool.NumWorkers = 4
 	Config.Pool.BatchSize = 4
+	Config.Pool.MinWait = 0 * time.Millisecond
 	Pool.Start()
 
 	// Wait for the jobs to finish setting their data

@@ -128,12 +128,13 @@ func (wp *workerPoolType) queryLoop() error {
 		return err
 	}
 	for {
+		minWait := time.After(Config.Pool.MinWait)
 		select {
 		case <-wp.exit:
 			// Close the channel to tell workers to stop executing new jobs
 			close(wp.jobs)
 			return nil
-		default:
+		case <-minWait:
 			if err := wp.sendNextJobs(Config.Pool.BatchSize); err != nil {
 				return err
 			}

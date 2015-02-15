@@ -279,15 +279,13 @@ func scanJob(reply interface{}, job *Job) error {
 		fieldValue := fields[i+1]
 		switch fieldName {
 		case "data":
-			data, err := redis.Bytes(fieldValue, nil)
-			if err != nil {
-				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to []byte.", fieldName, i, fieldValue, fieldValue)
+			if err := scanBytes(fieldValue, &(job.data)); err != nil {
+				return err
 			}
-			job.data = data
 		case "type":
-			typeName, err := redis.String(fieldValue, nil)
-			if err != nil {
-				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to string.", fieldName, i, fieldValue, fieldValue)
+			typeName := ""
+			if err := scanString(fieldValue, &typeName); err != nil {
+				return err
 			}
 			jobType, found := jobTypes[typeName]
 			if !found {
@@ -295,37 +293,77 @@ func scanJob(reply interface{}, job *Job) error {
 			}
 			job.typ = jobType
 		case "time":
-			time, err := redis.Int64(fieldValue, nil)
-			if err != nil {
-				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to int64.", fieldName, i, fieldValue, fieldValue)
+			if err := scanInt64(fieldValue, &(job.time)); err != nil {
+				return err
 			}
-			job.time = time
 		case "priority":
-			priority, err := redis.Int(fieldValue, nil)
-			if err != nil {
-				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to int.", fieldName, i, fieldValue, fieldValue)
+			if err := scanInt(fieldValue, &(job.priority)); err != nil {
+				return err
 			}
-			job.priority = priority
 		case "status":
-			status, err := redis.String(fieldValue, nil)
-			if err != nil {
-				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to JobStatus.", fieldName, i, fieldValue, fieldValue)
+			status := ""
+			if err := scanString(fieldValue, &status); err != nil {
+				return err
 			}
 			job.status = JobStatus(status)
 		case "started":
-			started, err := redis.Int64(fieldValue, nil)
-			if err != nil {
-				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to int64.", fieldName, i, fieldValue, fieldValue)
+			if err := scanInt64(fieldValue, &(job.started)); err != nil {
+				return err
 			}
-			job.started = started
 		case "finished":
-			finished, err := redis.Int64(fieldValue, nil)
-			if err != nil {
-				return fmt.Errorf("zazu: In scanJob: Could not convert %s (fields[%d] = %v) of type %T to int64.", fieldName, i, fieldValue, fieldValue)
+			if err := scanInt64(fieldValue, &(job.finished)); err != nil {
+				return err
 			}
-			job.finished = finished
 		}
 	}
+	return nil
+}
+
+func scanInt(reply interface{}, v *int) error {
+	if v == nil {
+		return fmt.Errorf("zazu: In scanInt: argument v was nil")
+	}
+	val, err := redis.Int(reply, nil)
+	if err != nil {
+		return fmt.Errorf("zazu: In scanInt: Could not convert %v of type %T to int.", reply, reply)
+	}
+	(*v) = val
+	return nil
+}
+
+func scanInt64(reply interface{}, v *int64) error {
+	if v == nil {
+		return fmt.Errorf("zazu: In scanInt64: argument v was nil")
+	}
+	val, err := redis.Int64(reply, nil)
+	if err != nil {
+		return fmt.Errorf("zazu: In scanInt64: Could not convert %v of type %T to int64.", reply, reply)
+	}
+	(*v) = val
+	return nil
+}
+
+func scanString(reply interface{}, v *string) error {
+	if v == nil {
+		return fmt.Errorf("zazu: In String: argument v was nil")
+	}
+	val, err := redis.String(reply, nil)
+	if err != nil {
+		return fmt.Errorf("zazu: In String: Could not convert %v of type %T to string.", reply, reply)
+	}
+	(*v) = val
+	return nil
+}
+
+func scanBytes(reply interface{}, v *[]byte) error {
+	if v == nil {
+		return fmt.Errorf("zazu: In scanBytes: argument v was nil")
+	}
+	val, err := redis.Bytes(reply, nil)
+	if err != nil {
+		return fmt.Errorf("zazu: In scanBytes: Could not convert %v of type %T to []byte.", reply, reply)
+	}
+	(*v) = val
 	return nil
 }
 

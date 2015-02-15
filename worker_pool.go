@@ -3,7 +3,6 @@ package zazu
 import (
 	"github.com/garyburd/redigo/redis"
 	"reflect"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -12,32 +11,6 @@ import (
 // and delegate those jobs to some number of workers. It will do this continuously
 // until the main program exits or you call Pool.Close().
 var Pool = &workerPoolType{}
-
-var (
-	// NumWorkers is the number of workers to run
-	// Each worker will run inside its own goroutine
-	// and execute jobs asynchronously.
-	NumWorkers = runtime.GOMAXPROCS(0)
-	// BatchSize is the number of jobs to send through
-	// the jobs channel at once. Increasing BatchSize means
-	// the worker pool will query the database less frequently,
-	// so you would get higher performance. However this comes
-	// at the cost that jobs with lower priority may sometimes be
-	// executed before jobs with higher priority, because the jobs
-	// with higher priority were not ready yet the last time the pool
-	// queried the database. Decreasing BatchSize means more
-	// frequent queries to the database and lower performance, but
-	// greater likelihood of executing jobs in perfect order with regards
-	// to priority. Setting BatchSize to 1 gaurantees that higher priority
-	// jobs are always executed first as soon as they are ready.
-	BatchSize = NumWorkers
-	// MaxWait is the maximum time the pool will wait before checking the
-	// database for queued jobs. The pool may query the database more frequently
-	// than MaxWait if it thinks there is likely to be new queued job. (e.g.,
-	// if it knows the time parameter of a job was satisfied since the last
-	// time it checked).
-	MaxWait = 200 * time.Millisecond
-)
 
 // worker continuously executes jobs within its own goroutine.
 // The jobs chan is shared between all jobs. To stop the worker,
@@ -112,8 +85,8 @@ type workerPoolType struct {
 // continuously query the database for queued jobs, and delegate those jobs
 // to the workers.
 func (wp *workerPoolType) Start() {
-	wp.workers = make([]*worker, NumWorkers)
-	wp.jobs = make(chan *Job, BatchSize)
+	wp.workers = make([]*worker, Config.Pool.NumWorkers)
+	wp.jobs = make(chan *Job, Config.Pool.BatchSize)
 	wp.wg = &sync.WaitGroup{}
 	wp.exit = make(chan bool)
 	for i := range wp.workers {
@@ -151,7 +124,7 @@ func (wp *workerPoolType) Wait() {
 // it finds any, sends them through the jobs channel for execution
 // by some worker.
 func (wp *workerPoolType) queryLoop() error {
-	if err := wp.sendNextJobs(BatchSize); err != nil {
+	if err := wp.sendNextJobs(Config.Pool.BatchSize); err != nil {
 		return err
 	}
 	for {
@@ -161,7 +134,7 @@ func (wp *workerPoolType) queryLoop() error {
 			close(wp.jobs)
 			return nil
 		default:
-			if err := wp.sendNextJobs(BatchSize); err != nil {
+			if err := wp.sendNextJobs(Config.Pool.BatchSize); err != nil {
 				return err
 			}
 		}
@@ -170,7 +143,7 @@ func (wp *workerPoolType) queryLoop() error {
 }
 
 func (wp *workerPoolType) sendNextJobs(n int) error {
-	jobs, err := getNextJobs(BatchSize)
+	jobs, err := getNextJobs(Config.Pool.BatchSize)
 	if err != nil {
 		return err
 	}

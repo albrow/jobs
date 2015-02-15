@@ -105,8 +105,8 @@ func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 
 	// Start the pool with 4 workers
 	runtime.GOMAXPROCS(4)
-	NumWorkers = 4
-	BatchSize = 4
+	Config.Pool.NumWorkers = 4
+	Config.Pool.BatchSize = 4
 	Pool.Start()
 
 	// Wait for the jobs to finish setting their data
@@ -146,8 +146,8 @@ func TestExecuteJobWithNoArguments(t *testing.T) {
 	}
 
 	// Start the pool with 1 worker
-	NumWorkers = 1
-	BatchSize = 1
+	Config.Pool.NumWorkers = 1
+	Config.Pool.BatchSize = 1
 	Pool.Start()
 
 	// Immediately close the pool and wait for workers to finish
@@ -191,8 +191,8 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 
 	// Start the pool with 4 workers
 	runtime.GOMAXPROCS(4)
-	NumWorkers = 4
-	BatchSize = 4
+	Config.Pool.NumWorkers = 4
+	Config.Pool.BatchSize = 4
 	Pool.Start()
 
 	// Immediately stop the pool to stop the workers from doing more jobs
@@ -256,8 +256,8 @@ func TestJobsOnlyExecutedOnce(t *testing.T) {
 
 	// Start the pool with 4 workers
 	runtime.GOMAXPROCS(4)
-	NumWorkers = 4
-	BatchSize = 4
+	Config.Pool.NumWorkers = 4
+	Config.Pool.BatchSize = 4
 	Pool.Start()
 
 	// Wait for the wait group, which tells us each job was executed at least once
@@ -310,8 +310,8 @@ func TestAllJobsExecuted(t *testing.T) {
 
 	// Start the pool with 4 workers
 	runtime.GOMAXPROCS(4)
-	NumWorkers = 4
-	BatchSize = 4
+	Config.Pool.NumWorkers = 4
+	Config.Pool.BatchSize = 4
 	Pool.Start()
 
 	// Continuously check the data every 10 milliseconds. Eventually
@@ -378,8 +378,8 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 
 	// Start the pool with 4 workers
 	runtime.GOMAXPROCS(4)
-	NumWorkers = 4
-	BatchSize = 4
+	Config.Pool.NumWorkers = 4
+	Config.Pool.BatchSize = 4
 	Pool.Start()
 
 	// Continuously check the data every 10 milliseconds. Eventually
@@ -439,8 +439,8 @@ func TestJobTimestamps(t *testing.T) {
 
 	// Start the pool with 1 worker
 	runtime.GOMAXPROCS(1)
-	NumWorkers = 1
-	BatchSize = 1
+	Config.Pool.NumWorkers = 1
+	Config.Pool.BatchSize = 1
 	poolStarted := time.Now()
 	Pool.Start()
 

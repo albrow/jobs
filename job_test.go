@@ -15,6 +15,7 @@ func TestJobSave(t *testing.T) {
 	}
 	job.started = 1
 	job.finished = 5
+	job.freq = 10
 	if err := job.save(); err != nil {
 		t.Errorf("Unexpected error saving job: %s", err.Error())
 	}
@@ -23,6 +24,7 @@ func TestJobSave(t *testing.T) {
 	assertJobFieldEquals(t, job, "data", job.data, nil)
 	assertJobFieldEquals(t, job, "type", job.typ.name, stringConverter)
 	assertJobFieldEquals(t, job, "time", job.time, int64Converter)
+	assertJobFieldEquals(t, job, "freq", job.freq, int64Converter)
 	assertJobFieldEquals(t, job, "priority", job.priority, intConverter)
 	assertJobFieldEquals(t, job, "started", job.started, int64Converter)
 	assertJobFieldEquals(t, job, "finished", job.finished, int64Converter)

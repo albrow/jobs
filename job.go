@@ -12,6 +12,7 @@ type Job struct {
 	typ      *JobType
 	status   JobStatus
 	time     int64
+	freq     int64
 	priority int
 	err      error
 	started  int64
@@ -248,6 +249,7 @@ func (j *Job) mainHashArgs() []interface{} {
 		"data", string(j.data),
 		"type", j.typ.name,
 		"time", j.time,
+		"freq", j.freq,
 		"priority", j.priority,
 		"status", j.status,
 		"started", j.started,
@@ -292,6 +294,10 @@ func scanJob(reply interface{}, job *Job) error {
 			job.typ = jobType
 		case "time":
 			if err := scanInt64(fieldValue, &(job.time)); err != nil {
+				return err
+			}
+		case "freq":
+			if err := scanInt64(fieldValue, &(job.freq)); err != nil {
 				return err
 			}
 		case "priority":

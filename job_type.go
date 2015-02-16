@@ -73,12 +73,12 @@ func (jt *JobType) Enqueue(priority int, time time.Time, data interface{}) (*Job
 		time:     time.UTC().UnixNano(),
 		priority: priority,
 	}
-	if err := job.save(); err != nil {
+	t := newTransaction()
+	t.saveJob(job)
+	t.setJobStatus(job, job.status, StatusQueued)
+	if err := t.exec(); err != nil {
 		return nil, err
 	}
-	// Set the status to queued
-	if err := job.setStatus(StatusQueued); err != nil {
-		return nil, err
-	}
+	job.status = StatusQueued
 	return job, nil
 }

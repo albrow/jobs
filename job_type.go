@@ -55,7 +55,7 @@ func (jt *JobType) String() string {
 	return jt.name
 }
 
-func (jt *JobType) Enqueue(priority int, time time.Time, data interface{}) (*Job, error) {
+func (jt *JobType) Schedule(priority int, time time.Time, data interface{}) (*Job, error) {
 	// Check the type of data
 	dataType := reflect.TypeOf(data)
 	if dataType != jt.dataType {

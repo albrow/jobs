@@ -96,9 +96,9 @@ func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 	queuedJobs := make([]*Job, len(data))
 	for i := 0; i < len(data); i++ {
 		waitForJobs.Add(1)
-		job, err := setStringJob.Enqueue(100, time.Now(), i)
+		job, err := setStringJob.Schedule(100, time.Now(), i)
 		if err != nil {
-			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
+			t.Errorf("Unexpected error in Schedule: %s", err.Error())
 		}
 		queuedJobs[i] = job
 	}
@@ -142,8 +142,8 @@ func TestExecuteJobWithNoArguments(t *testing.T) {
 	}
 
 	// Queue up a single job
-	if _, err := setOkayJob.Enqueue(100, time.Now(), nil); err != nil {
-		t.Errorf("Unexpected error in Enqueue(): %s", err.Error())
+	if _, err := setOkayJob.Schedule(100, time.Now(), nil); err != nil {
+		t.Errorf("Unexpected error in Schedule(): %s", err.Error())
 	}
 
 	// Start the pool with 1 worker
@@ -183,9 +183,9 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 	queuedJobs := make([]*Job, len(data))
 	for i := 0; i < len(data); i++ {
 		// Lower indexes have higher priority and should be completed first
-		job, err := setStringJob.Enqueue(8-i, time.Now(), i)
+		job, err := setStringJob.Schedule(8-i, time.Now(), i)
 		if err != nil {
-			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
+			t.Errorf("Unexpected error in Schedule: %s", err.Error())
 		}
 		queuedJobs[i] = job
 	}
@@ -250,8 +250,8 @@ func TestJobsOnlyExecutedOnce(t *testing.T) {
 	// Queue up some jobs
 	for i := 0; i < len(data); i++ {
 		waitForJobs.Add(1)
-		if _, err := incrementJob.Enqueue(100, time.Now(), i); err != nil {
-			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
+		if _, err := incrementJob.Schedule(100, time.Now(), i); err != nil {
+			t.Errorf("Unexpected error in Schedule: %s", err.Error())
 		}
 	}
 
@@ -304,8 +304,8 @@ func TestAllJobsExecuted(t *testing.T) {
 
 	// Queue up some jobs
 	for i := 0; i < len(data); i++ {
-		if _, err := setStringJob.Enqueue(100, time.Now(), i); err != nil {
-			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
+		if _, err := setStringJob.Schedule(100, time.Now(), i); err != nil {
+			t.Errorf("Unexpected error in Schedule: %s", err.Error())
 		}
 	}
 
@@ -372,8 +372,8 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 	timeDiff := 200 * time.Millisecond
 	futureTime := currentTime.Add(timeDiff)
 	for i := 0; i < len(data); i++ {
-		if _, err := setStringJob.Enqueue(100, futureTime, i); err != nil {
-			t.Errorf("Unexpected error in Enqueue: %s", err.Error())
+		if _, err := setStringJob.Schedule(100, futureTime, i); err != nil {
+			t.Errorf("Unexpected error in Schedule: %s", err.Error())
 		}
 	}
 
@@ -433,9 +433,9 @@ func TestJobTimestamps(t *testing.T) {
 
 	// Queue up a single job
 	sleepDuration := 10 * time.Millisecond
-	job, err := sleepJob.Enqueue(100, time.Now(), sleepDuration)
+	job, err := sleepJob.Schedule(100, time.Now(), sleepDuration)
 	if err != nil {
-		t.Errorf("Unexpected error in sleepJob.Enqueue(): %s", err.Error())
+		t.Errorf("Unexpected error in sleepJob.Schedule(): %s", err.Error())
 	}
 
 	// Start the pool with 1 worker

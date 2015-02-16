@@ -44,7 +44,7 @@ func TestRegisterJobType(t *testing.T) {
 	}
 }
 
-func TestJobTypeEnqueue(t *testing.T) {
+func TestJobTypeSchedule(t *testing.T) {
 	// Reset job types and flush database
 	flushdb()
 	jobTypes = map[string]*JobType{}
@@ -62,14 +62,14 @@ func TestJobTypeEnqueue(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error registering job type: %s", err)
 	}
-	// Call Enqueue
-	job, err := jobType.Enqueue(testJobPriority, testJobTime, testJobData)
+	// Call Schedule
+	job, err := jobType.Schedule(testJobPriority, testJobTime, testJobData)
 	if err != nil {
-		t.Errorf("Unexpected error in jobType.Enqueue(): %s", err)
+		t.Errorf("Unexpected error in jobType.Schedule(): %s", err)
 	}
 	// Make sure the job was saved in the database correctly
 	if job.id == "" {
-		t.Errorf("After jobType.Enqueue, job.id was empty.")
+		t.Errorf("After jobType.Schedule, job.id was empty.")
 	}
 	assertKeyExists(t, job.key())
 	assertJobFieldEquals(t, job, "priority", testJobPriority, intConverter)
@@ -77,7 +77,7 @@ func TestJobTypeEnqueue(t *testing.T) {
 	assertJobFieldEquals(t, job, "data", encodedData, bytesConverter)
 	assertJobStatusEquals(t, job, StatusQueued)
 	// Make sure we get an error if the data is not the correct type
-	if _, err := jobType.Enqueue(0, time.Now(), 0); err == nil {
-		t.Errorf("Expected error when calling jobType.Enqueue with incorrect data type but got none")
+	if _, err := jobType.Schedule(0, time.Now(), 0); err == nil {
+		t.Errorf("Expected error when calling jobType.Schedule with incorrect data type but got none")
 	}
 }

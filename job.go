@@ -15,6 +15,7 @@ type Job struct {
 	freq     int64
 	priority int
 	err      error
+	retries  int
 	started  int64
 	finished int64
 }
@@ -26,7 +27,7 @@ const (
 	StatusQueued    JobStatus = "queued"
 	StatusExecuting JobStatus = "executing"
 	StatusFinished  JobStatus = "finished"
-	StatusError     JobStatus = "error"
+	StatusFailed    JobStatus = "error"
 	StatusCancelled JobStatus = "cancelled"
 	StatusDestroyed JobStatus = "destroyed"
 )
@@ -50,7 +51,7 @@ var possibleStatuses = []JobStatus{
 	StatusQueued,
 	StatusExecuting,
 	StatusFinished,
-	StatusError,
+	StatusFailed,
 	StatusCancelled,
 	StatusDestroyed,
 }
@@ -184,7 +185,10 @@ func (j *Job) Cancel() error {
 
 // setError sets the err property of j and adds it to the set of jobs which had errors
 func (j *Job) setError(err error) error {
-	// TODO: implement this
+	j.err = err
+	t := newTransaction()
+	t.command("HSET", redis.Args{j.key(), "error", j.err.Error()}, nil)
+	t.moveJobToStatusSet(j, j.status, StatusFailed)
 	return nil
 }
 
@@ -268,6 +272,7 @@ func (j *Job) mainHashArgs() []interface{} {
 		"time", j.time,
 		"freq", j.freq,
 		"priority", j.priority,
+		"retries", j.retries,
 		"status", j.status,
 		"started", j.started,
 		"finished", j.finished,
@@ -319,6 +324,10 @@ func scanJob(reply interface{}, job *Job) error {
 			}
 		case "priority":
 			if err := scanInt(fieldValue, &(job.priority)); err != nil {
+				return err
+			}
+		case "retries":
+			if err := scanInt(fieldValue, &(job.retries)); err != nil {
 				return err
 			}
 		case "status":

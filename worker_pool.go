@@ -187,7 +187,7 @@ func getNextJobs(n int) ([]*Job, error) {
 	// Get all the jobs from the jobs:readyAndSorted set, which contains the next n jobs that
 	// are ready based on their time parameter sorted by priority.
 	jobIds := []string{}
-	t0.script(getAndMoveJobsToExecutingScript, redis.Args{jobsReadyAndSortedKey, StatusQueued.key(), StatusExecuting.key()}, newScanStringsHandler(&jobIds))
+	t0.getAndMoveJobsToExecuting(jobsReadyAndSortedKey, newScanStringsHandler(&jobIds))
 
 	// Delete the temporary sets we created for intersecting
 	t0.command("DEL", redis.Args{jobsReadyByTimeKey, jobsReadyAndSortedKey}, nil)

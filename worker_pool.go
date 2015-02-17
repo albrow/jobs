@@ -35,7 +35,7 @@ func (w *worker) start() {
 				panic(err)
 			}
 			// Use reflection to instantiate arguments for the handler
-			args := []reflect.Value{}
+			handlerArgs := []reflect.Value{}
 			if job.typ.dataType != nil {
 				// Instantiate a new variable to hold this argument
 				dataVal := reflect.New(job.typ.dataType)
@@ -43,18 +43,27 @@ func (w *worker) start() {
 					// TODO: set the job status to StatusError instead of panicking
 					panic(err)
 				}
-				args = append(args, dataVal.Elem())
+				handlerArgs = append(handlerArgs, dataVal.Elem())
 			}
 			// Call the handler using the arguments we just instantiated
 			handlerVal := reflect.ValueOf(job.typ.handler)
-			handlerVal.Call(args)
-			// After we have called the handler function, mark the status as finished
-			// and set the finished timestamp
+			handlerVal.Call(handlerArgs)
+			// Set the finished timestamp
 			job.finished = time.Now().UTC().UnixNano()
 			t1 := newTransaction()
-			args1 := redis.Args{job.key(), "finished", job.finished}
-			t1.command("HSET", args1, nil)
-			t1.setJobStatus(job, job.status, StatusFinished)
+			redisArgs := redis.Args{job.key(), "finished", job.finished}
+			t1.command("HSET", redisArgs, nil)
+			if job.isRecurring() {
+				// If the job is recurring, reschedule and set status to queued
+				job.time = job.nextTime()
+				redisArgs = redis.Args{job.key(), "time", job.time}
+				t1.command("HSET", redisArgs, nil)
+				t1.addJobToTimeIndex(job)
+				t1.setJobStatus(job, job.status, StatusQueued)
+			} else {
+				// Otherwise, set status to finished
+				t1.setJobStatus(job, job.status, StatusFinished)
+			}
 			if err := t1.exec(); err != nil {
 				// TODO: set the job status to StatusError instead of panicking
 				panic(err)

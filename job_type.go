@@ -56,15 +56,10 @@ func (jt *JobType) String() string {
 }
 
 func (jt *JobType) Schedule(priority int, time time.Time, data interface{}) (*Job, error) {
-	// Check the type of data
-	dataType := reflect.TypeOf(data)
-	if dataType != jt.dataType {
-		return nil, fmt.Errorf("zazu: in Enqueue, provided data was not of the correct type.\nExpected %s as specified in RegisterJobType, but got %s", jt.dataType, dataType)
-	}
 	// Encode the data
-	encodedData, err := encode(data)
+	encodedData, err := jt.encodeData(data)
 	if err != nil {
-		return nil, fmt.Errorf("zazu: in Enqueue, error encoding data: %s", err.Error())
+		return nil, err
 	}
 	// Create and save the job
 	job := &Job{
@@ -73,12 +68,54 @@ func (jt *JobType) Schedule(priority int, time time.Time, data interface{}) (*Jo
 		time:     time.UTC().UnixNano(),
 		priority: priority,
 	}
+	// Set the job's status to queued, save it in the database, and add it to the queued set
 	t := newTransaction()
+	job.status = StatusQueued
 	t.saveJob(job)
-	t.setJobStatus(job, job.status, StatusQueued)
+	t.addJobToStatusSet(job, StatusQueued)
 	if err := t.exec(); err != nil {
 		return nil, err
 	}
-	job.status = StatusQueued
 	return job, nil
+}
+
+func (jt *JobType) ScheduleRecurring(priority int, time time.Time, freq time.Duration, data interface{}) (*Job, error) {
+	// Encode the data
+	encodedData, err := jt.encodeData(data)
+	if err != nil {
+		return nil, err
+	}
+	// Create and save the job
+	job := &Job{
+		data:     encodedData,
+		typ:      jt,
+		time:     time.UTC().UnixNano(),
+		freq:     freq.Nanoseconds(),
+		priority: priority,
+	}
+	// Set the job's status to queued, save it in the database, and add it to the queued set
+	t := newTransaction()
+	job.status = StatusQueued
+	t.saveJob(job)
+	t.addJobToStatusSet(job, StatusQueued)
+	if err := t.exec(); err != nil {
+		return nil, err
+	}
+	return job, nil
+}
+
+// encodeData checks that the type of data is what we expect based on the handler for jt. If it is,
+// it encodes the data into a slice of bytes.
+func (jt *JobType) encodeData(data interface{}) ([]byte, error) {
+	// Check the type of data
+	dataType := reflect.TypeOf(data)
+	if dataType != jt.dataType {
+		return nil, fmt.Errorf("zazu: provided data was not of the correct type.\nExpected %s for JobType %s, but got %s", jt.dataType, jt, dataType)
+	}
+	// Encode the data
+	encodedData, err := encode(data)
+	if err != nil {
+		return nil, fmt.Errorf("zazu: error encoding data: %s", err.Error())
+	}
+	return encodedData, nil
 }

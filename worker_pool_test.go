@@ -1,6 +1,7 @@
 package zazu
 
 import (
+	"github.com/dustin/go-humanize"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -464,6 +465,73 @@ func TestJobTimestamps(t *testing.T) {
 	assertDurationBetween(t, job.Duration(), sleepDuration, poolClosed.Sub(poolStarted))
 }
 
+// TestRecurringJob creates and executes a recurring job, then makes sure that the
+// job is actually executed with the expected frequency.
+func TestRecurringJob(t *testing.T) {
+	flushdb()
+	jobTypes = map[string]*JobType{}
+
+	// Register a job type which will simply send through to a channel
+	jobFinished := make(chan bool)
+	signalJob, err := RegisterJobType("signalJob", func() {
+		jobFinished <- true
+	})
+	if err != nil {
+		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+	}
+
+	// Schedule a recurring signalJob
+	freq := 20 * time.Millisecond
+	currentTime := time.Now()
+	currentTimeUnix := currentTime.UTC().UnixNano()
+	expectedTimes := []int64{currentTimeUnix, currentTimeUnix + freq.Nanoseconds(), currentTimeUnix + freq.Nanoseconds()*2, currentTimeUnix + freq.Nanoseconds()*3}
+	job, err := signalJob.ScheduleRecurring(100, currentTime, freq, nil)
+	if err != nil {
+		t.Errorf("Unexpected error in ScheduleRecurring: %s", err.Error())
+	}
+
+	// Start the pool with 1 worker
+	runtime.GOMAXPROCS(1)
+	Config.Pool.NumWorkers = 1
+	Config.Pool.BatchSize = 1
+	Config.Pool.MinWait = 0 * time.Millisecond
+	Pool.Start()
+
+	// Wait for three successful scheduled executions at the specified
+	// frequency, with some tolerance for variation due to execution overhead.
+	expectedSuccesses := 3
+	successCount := 0
+	tolerance := 0.1
+	timeoutDur := time.Duration(int64(float64(freq.Nanoseconds()) * (1 + tolerance)))
+OuterLoop:
+	for {
+		timeout := time.Tick(timeoutDur)
+		select {
+		case <-jobFinished:
+			// This means one more job was successfully executed
+			successCount += 1
+			if err := job.Refresh(); err != nil {
+				t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
+			}
+			// Make sure the next scheduled job time parameter is correct
+			if job.time != expectedTimes[successCount] {
+				t.Errorf("job.time was wrong.\n\tExpected: %v\n\tBut got:  %v", expectedTimes[successCount], job.time)
+			}
+			// Make sure the job was started after the previous expected time
+			expectedStartAfter := time.Unix(0, expectedTimes[successCount-1])
+			assertTimeAfter(t, job.Started(), expectedStartAfter)
+			// If we reached expectedSuccesses, we're done and the test passes!
+			if successCount == expectedSuccesses {
+				break OuterLoop
+			}
+		case <-timeout:
+			t.Errorf("Expected %d jobs to execute within %v each, but only %d jobs executed successfully. There was a timeout for the %s job", expectedSuccesses, timeoutDur, successCount, humanize.Ordinal(successCount+1))
+			t.FailNow()
+		}
+	}
+
+}
+
 // assertTestDataOk reports an error if any elements in data do not equal "ok". It is only used for
 // tests in this file. Many of the tests use a slice of strings as data and queue up jobs to set one
 // of the elements to "ok", so this makes checking them easier.
@@ -492,14 +560,24 @@ func assertTimeNotZero(t *testing.T, x time.Time) {
 	}
 }
 
-// assertTimeBetween reports an error if x is not before and after the given times.
-func assertTimeBetween(t *testing.T, x, before, after time.Time) {
-	if !x.Before(before) {
-		t.Errorf("time x was incorrect. Expected it to be before %v but got %v.", before, x)
-	}
+// assertTimeAfter reports an error if x is not after the given time.
+func assertTimeAfter(t *testing.T, x, after time.Time) {
 	if !x.After(after) {
 		t.Errorf("time x was incorrect. Expected it to be after %v but got %v.", after, x)
 	}
+}
+
+// assertTimeBefore reports an error if x is not before the given time.
+func assertTimeBefore(t *testing.T, x, before time.Time) {
+	if !x.Before(before) {
+		t.Errorf("time x was incorrect. Expected it to be before %v but got %v.", before, x)
+	}
+}
+
+// assertTimeBetween reports an error if x is not before and after the given times.
+func assertTimeBetween(t *testing.T, x, before, after time.Time) {
+	assertTimeBefore(t, x, before)
+	assertTimeAfter(t, x, after)
 }
 
 // assertDurationNotZero reports an error if d is equal to zero.

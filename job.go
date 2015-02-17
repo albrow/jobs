@@ -97,6 +97,25 @@ func (j *Job) key() string {
 	return "jobs:" + j.id
 }
 
+// isRecurring returns true iff the job is recurring
+func (j *Job) isRecurring() bool {
+	return j.freq != 0
+}
+
+// nextTime returns the time (unix UTC with nanosecond precision) that the
+// job should execute next, if it is a recurring job, and 0 if it is not.
+func (j *Job) nextTime() int64 {
+	if !j.isRecurring() {
+		return 0
+	}
+	// NOTE: is this the proper way to handle rescheduling?
+	// What if we schedule jobs faster than they can be executed?
+	// Should we just let them build up and expect the end user to
+	// allocate more workers? Or should we schedule for time.Now at
+	// the earliest to prevent buildup?
+	return j.time + j.freq
+}
+
 // save writes the job to the database but does not enqueue it. If you want to add it
 // to the queue, use the Enqueue method after save.
 func (j *Job) save() error {
@@ -125,6 +144,10 @@ func (t *transaction) saveJob(job *Job) {
 	// Add the Job attributes to a hash
 	t.command("HMSET", job.mainHashArgs(), nil)
 	// Add the job to the time index
+	t.addJobToTimeIndex(job)
+}
+
+func (t *transaction) addJobToTimeIndex(job *Job) {
 	args := redis.Args{keys.jobsTimeIndex, job.time, job.id}
 	t.command("ZADD", args, nil)
 }

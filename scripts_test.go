@@ -7,7 +7,8 @@ import (
 )
 
 func TestGetAndMoveJobsToExecutingScript(t *testing.T) {
-	flushdb()
+	testingSetUp()
+	defer testingTeardown()
 
 	// Set up the database
 	tx0 := newTransaction()

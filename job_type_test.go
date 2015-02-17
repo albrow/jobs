@@ -45,9 +45,8 @@ func TestRegisterJobType(t *testing.T) {
 }
 
 func TestJobTypeSchedule(t *testing.T) {
-	// Reset job types and flush database
-	flushdb()
-	jobTypes = map[string]*JobType{}
+	testingSetUp()
+	defer testingTeardown()
 	// Register a new job type
 	testJobName := "testJob1"
 	testJobPriority := 100

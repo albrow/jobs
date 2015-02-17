@@ -6,7 +6,8 @@ import (
 )
 
 func TestJobSave(t *testing.T) {
-	flushdb()
+	testingSetUp()
+	defer testingTeardown()
 
 	// Create and save a test job
 	job, err := createTestJob()
@@ -37,7 +38,8 @@ func TestJobSave(t *testing.T) {
 }
 
 func TestJobRefresh(t *testing.T) {
-	flushdb()
+	testingSetUp()
+	defer testingTeardown()
 
 	// Create and save a job
 	job, err := createAndSaveTestJob()
@@ -185,7 +187,8 @@ var (
 // step is what we expect.
 func testJobStatePaths(t *testing.T, statePaths []statePath) {
 	for _, statePath := range statePaths {
-		flushdb()
+		testingSetUp()
+		defer testingTeardown()
 		// Create a new test job
 		job, err := createAndSaveTestJob()
 		if err != nil {
@@ -202,7 +205,8 @@ func testJobStatePaths(t *testing.T, statePaths []statePath) {
 }
 
 func TestJobScanReply(t *testing.T) {
-	flushdb()
+	testingSetUp()
+	defer testingTeardown()
 	job, err := createAndSaveTestJob()
 	if err != nil {
 		t.Errorf("Unexpected error: %s")
@@ -223,7 +227,8 @@ func TestJobScanReply(t *testing.T) {
 }
 
 func TestJobStatusCount(t *testing.T) {
-	flushdb()
+	testingSetUp()
+	defer testingTeardown()
 	job, err := createAndSaveTestJob()
 	if err != nil {
 		t.Errorf("Unexpected error: %s")

@@ -13,8 +13,8 @@ import (
 // TestNextJobs tests the getNextJobs function, which queries the database to find
 // the next queued jobs, in order of their priority.
 func TestGetNextJobs(t *testing.T) {
-	flushdb()
-	jobTypes = map[string]*JobType{}
+	testingSetUp()
+	defer testingTeardown()
 
 	// Create a test job with high priority
 	highPriorityJob, err := createTestJob()
@@ -66,8 +66,8 @@ func TestGetNextJobs(t *testing.T) {
 }
 
 func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
-	flushdb()
-	jobTypes = map[string]*JobType{}
+	testingSetUp()
+	defer testingTeardown()
 
 	defer func() {
 		// Close the pool and wait for workers to finish
@@ -130,8 +130,8 @@ func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 // TestExecuteJobWithNoArguments registers and executes a job without any
 // arguments and then checks that it executed correctly.
 func TestExecuteJobWithNoArguments(t *testing.T) {
-	flushdb()
-	jobTypes = map[string]*JobType{}
+	testingSetUp()
+	defer testingTeardown()
 
 	// Register a job type with a handler that expects 0 arguments
 	data := ""
@@ -168,8 +168,8 @@ func TestExecuteJobWithNoArguments(t *testing.T) {
 // Then it makes sure that the jobs with higher priorities were executed, and the lower priority ones
 // were not.
 func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
-	flushdb()
-	jobTypes = map[string]*JobType{}
+	testingSetUp()
+	defer testingTeardown()
 
 	// Register some jobs which will simply set one of the values in data
 	data := make([]string, 8)
@@ -234,8 +234,8 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 // has its own counter). Then it starts the pool and runs the query loop for at most two
 // iterations. Then it checks that each job was executed only once by observing the counters.
 func TestJobsOnlyExecutedOnce(t *testing.T) {
-	flushdb()
-	jobTypes = map[string]*JobType{}
+	testingSetUp()
+	defer testingTeardown()
 
 	// Register some jobs which will simply increment one of the values in data
 	data := make([]int, 4)
@@ -284,8 +284,8 @@ func TestJobsOnlyExecutedOnce(t *testing.T) {
 // second, it breaks and reports an error. 1 second should be plenty of time
 // to execute the jobs.
 func TestAllJobsExecuted(t *testing.T) {
-	flushdb()
-	jobTypes = map[string]*JobType{}
+	testingSetUp()
+	defer testingTeardown()
 
 	defer func() {
 		// Close the pool and wait for workers to finish
@@ -348,8 +348,8 @@ func TestAllJobsExecuted(t *testing.T) {
 // TestJobsAreNotExecutedUntilTime sets up a few jobs with a time parameter in the future
 // Then it makes sure that those jobs are not executed until after that time.
 func TestJobsAreNotExecutedUntilTime(t *testing.T) {
-	flushdb()
-	jobTypes = map[string]*JobType{}
+	testingSetUp()
+	defer testingTeardown()
 
 	defer func() {
 		// Close the pool and wait for workers to finish
@@ -421,8 +421,8 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 // TestJobTimestamps creates and executes a job, then tests that the started and finished
 // values were correct.
 func TestJobTimestamps(t *testing.T) {
-	flushdb()
-	jobTypes = map[string]*JobType{}
+	testingSetUp()
+	defer testingTeardown()
 
 	// Register a job type which will do nothing but sleep for some duration
 	sleepJob, err := RegisterJobType("sleep", func(d time.Duration) {
@@ -468,8 +468,8 @@ func TestJobTimestamps(t *testing.T) {
 // TestRecurringJob creates and executes a recurring job, then makes sure that the
 // job is actually executed with the expected frequency.
 func TestRecurringJob(t *testing.T) {
-	flushdb()
-	jobTypes = map[string]*JobType{}
+	testingSetUp()
+	defer testingTeardown()
 
 	// Register a job type which will simply send through to a channel
 	jobFinished := make(chan bool)

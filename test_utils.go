@@ -4,9 +4,28 @@ import (
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
+
+var setUpOnce = sync.Once{}
+
+func testingSetUp() {
+	setUpOnce.Do(func() {
+		// Use database 14 and a unix socket connection for testing
+		Config.Db.Database = 14
+		Config.Db.Address = "/tmp/redis.sock"
+		Config.Db.Network = "unix"
+	})
+	// Clear out any old job types
+	jobTypes = map[string]*JobType{}
+}
+
+func testingTeardown() {
+	// Flush the database
+	flushdb()
+}
 
 func flushdb() {
 	conn := redisPool.Get()

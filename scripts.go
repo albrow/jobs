@@ -29,23 +29,54 @@ var getAndMoveJobsToExecuting = redis.NewScript(3, `
 	return jobIds
 `)
 
-// decrJobRetires is a lua script that takes the following arguments:
-// 1) The key of the job for which to decrement retries.
+// retryOrFailJob is a lua script that takes the following arguments:
+// 1) The key of the job to either retry or fail
+// 2) The id of the job to either retry or fail
+// 3) The priority of the job
+// 4) The key for the executing status set
+// 5) The key for the queued status set
+// 6) The key for the failed status set
 // It first checks if the job has any retries remaining. If it does,
-// then it decrements the number of retries and returns true to indicate
-// that the job does have retries remaining. If it does not, i.e. if
-// retries == 0, then it returns false.
-var decrJobRetries = redis.NewScript(1, `
+// then it:
+// 	1) Decrements the number of retries for the given job
+// 	2) Adds the job to the queued set
+//		3) Removes the job from the executing set
+// 	4) Returns true
+// If the job has no retries remaining then it:
+// 	1) Adds the job to the failed set
+//		3) Removes the job from the executing set
+// 	2) Returns false
+var retryOrFailJob = redis.NewScript(6, `
 	-- Assign keys to variables for easy reference
 	local jobKey = KEYS[1]
+	local jobId = KEYS[2]
+	local jobPriority = KEYS[3]
+	local executingSet = KEYS[4]
+	local queuedSet = KEYS[5]
+	local failedSet = KEYS[6]
 	-- Check how many retries remain
 	local retries = redis.call('HGET', jobKey, 'retries')
 	if retries == "0" then
+		-- add the job to the failed set
+		redis.call('ZADD', failedSet, jobPriority, jobId)
+		-- remove the job from the executing set
+		redis.call('ZREM', executingSet, jobId)
+		-- Set the job status in the hash
+		redis.call('HSET', jobKey, 'status', 'failed')
+		-- Return false to indicate the job has not been queued for retry
 		-- NOTE: 0 is used to represent false because apparently
 		-- false gets converted to nil
 		return 0
 	else
+		-- subtract 1 from the remaining retries
 		redis.call('HINCRBY', jobKey, 'retries', -1)
+		-- add the job to the queued set
+		redis.call('ZADD', queuedSet, jobPriority, jobId)
+		-- remove the job from the executing set
+		redis.call('ZREM', executingSet, jobId)
+		-- Set the job status in the hash
+		redis.call('HSET', jobKey, 'status', 'queued')
+		-- Return true to indicate the job has been queued for retry
 		-- NOTE: 1 is used to represent true (for consistency)
 		return 1
 	end

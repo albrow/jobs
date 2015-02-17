@@ -27,7 +27,7 @@ const (
 	StatusQueued    JobStatus = "queued"
 	StatusExecuting JobStatus = "executing"
 	StatusFinished  JobStatus = "finished"
-	StatusFailed    JobStatus = "error"
+	StatusFailed    JobStatus = "failed"
 	StatusCancelled JobStatus = "cancelled"
 	StatusDestroyed JobStatus = "destroyed"
 )

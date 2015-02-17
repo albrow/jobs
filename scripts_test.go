@@ -73,13 +73,13 @@ func TestDecrJobRetriesScript(t *testing.T) {
 	}{
 		{
 			// One job will start with 2 retries remaining
-			job:             &Job{typ: testJob, id: "retriesRemainingJob", retries: 2},
+			job:             &Job{typ: testJob, id: "retriesRemainingJob", retries: 2, status: StatusExecuting},
 			expectedReturn:  true,
 			expectedRetries: 1,
 		},
 		{
 			// One job will start with 0 retries remaining
-			job:             &Job{typ: testJob, id: "noRetriesJob", retries: 0},
+			job:             &Job{typ: testJob, id: "noRetriesJob", retries: 0, status: StatusExecuting},
 			expectedReturn:  false,
 			expectedRetries: 0,
 		},
@@ -93,7 +93,7 @@ func TestDecrJobRetriesScript(t *testing.T) {
 		// Save the job
 		tx.saveJob(tc.job)
 		// Run the script and save the return value in a slice
-		tx.script(decrJobRetries, redis.Args{tc.job.key()}, newScanBoolHandler(&(gotReturns[i])))
+		tx.script(retryOrFailJob, redis.Args{tc.job.key(), tc.job.id, tc.job.priority, StatusExecuting.key(), StatusQueued.key(), StatusFailed.key()}, newScanBoolHandler(&(gotReturns[i])))
 		// Get the new number of retries from the database and save the value in a slice
 		tx.command("HGET", redis.Args{tc.job.key(), "retries"}, newScanIntHandler(&(gotRetries[i])))
 	}
@@ -104,11 +104,22 @@ func TestDecrJobRetriesScript(t *testing.T) {
 
 	// Iterate through test cases again and check the results
 	for i, tc := range testCases {
+		if gotRetries[i] != tc.expectedRetries {
+			t.Errorf("Number of retries after executing script was incorrect for test case %d (job:%s). Expected %v but got %v", i, tc.job.id, tc.expectedRetries, gotRetries[i])
+		}
 		if gotReturns[i] != tc.expectedReturn {
 			t.Errorf("Return value from script was incorrect for test case %d (job:%s). Expected %v but got %v", i, tc.job.id, tc.expectedReturn, gotReturns[i])
 		}
-		if gotRetries[i] != tc.expectedRetries {
-			t.Errorf("Number of retries after executing script was incorrect for test case %d (job:%s). Expected %v but got %v", i, tc.job.id, tc.expectedRetries, gotRetries[i])
+		// Make sure the job was removed from the executing set and placed in the correct set
+		if err := tc.job.Refresh(); err != nil {
+			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
+		}
+		if tc.expectedReturn == false {
+			// We expect the job to be in the failed set because it had no retries left
+			assertJobStatusEquals(t, tc.job, StatusFailed)
+		} else {
+			// We expect the job to be in the queued set because it was queued for retry
+			assertJobStatusEquals(t, tc.job, StatusQueued)
 		}
 	}
 }

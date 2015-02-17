@@ -484,7 +484,7 @@ func TestRecurringJob(t *testing.T) {
 	freq := 20 * time.Millisecond
 	currentTime := time.Now()
 	currentTimeUnix := currentTime.UTC().UnixNano()
-	expectedTimes := []int64{currentTimeUnix, currentTimeUnix + freq.Nanoseconds(), currentTimeUnix + freq.Nanoseconds()*2, currentTimeUnix + freq.Nanoseconds()*3}
+
 	job, err := signalJob.ScheduleRecurring(100, currentTime, freq, nil)
 	if err != nil {
 		t.Errorf("Unexpected error in ScheduleRecurring: %s", err.Error())
@@ -499,7 +499,11 @@ func TestRecurringJob(t *testing.T) {
 
 	// Wait for three successful scheduled executions at the specified
 	// frequency, with some tolerance for variation due to execution overhead.
-	expectedSuccesses := 3
+	expectedSuccesses := 5
+	expectedTimes := []int64{}
+	for i := 0; i <= expectedSuccesses; i++ {
+		expectedTimes = append(expectedTimes, currentTimeUnix+freq.Nanoseconds()*int64(i))
+	}
 	successCount := 0
 	tolerance := 0.1
 	timeoutDur := time.Duration(int64(float64(freq.Nanoseconds()) * (1 + tolerance)))

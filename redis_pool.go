@@ -10,7 +10,14 @@ var redisPool = &redis.Pool{
 	MaxActive:   0,
 	IdleTimeout: 240 * time.Second,
 	Dial: func() (redis.Conn, error) {
-		// TODO: make this configurable
-		return redis.Dial("tcp", "localhost:6379")
+		c, err := redis.Dial(Config.Db.Network, Config.Db.Address)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := c.Do("SELECT", Config.Db.Database); err != nil {
+			c.Close()
+			return nil, err
+		}
+		return c, nil
 	},
 }

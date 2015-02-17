@@ -148,8 +148,7 @@ func (t *transaction) saveJob(job *Job) {
 }
 
 func (t *transaction) addJobToTimeIndex(job *Job) {
-	args := redis.Args{keys.jobsTimeIndex, job.time, job.id}
-	t.command("ZADD", args, nil)
+	t.command("ZADD", redis.Args{keys.jobsTimeIndex, job.time, job.id}, nil)
 }
 
 // Refresh mutates the job by setting its fields to the most recent data
@@ -200,11 +199,9 @@ func (j *Job) Destroy() error {
 	// Remove the job hash
 	t.command("DEL", redis.Args{j.key()}, nil)
 	// Remove the job from the set it is currently in
-	args := redis.Args{j.status.key(), j.id}
-	t.command("ZREM", args, nil)
+	t.command("ZREM", redis.Args{j.status.key(), j.id}, nil)
 	// Remove the job from the time index
-	args = redis.Args{keys.jobsTimeIndex, j.id}
-	t.command("ZREM", args, nil)
+	t.command("ZREM", redis.Args{keys.jobsTimeIndex, j.id}, nil)
 	// Execute the transaction
 	if err := t.exec(); err != nil {
 		return err
@@ -240,8 +237,7 @@ func (j *Job) setStatus(status JobStatus) error {
 // setJobStatus adds commands to the transaction which will set the status field
 // in the main hash for the job and move it to the appropriate status set
 func (t *transaction) setJobStatus(job *Job, oldStatus, newStatus JobStatus) {
-	args := redis.Args{job.key(), "status", string(newStatus)}
-	t.command("HSET", args, nil)
+	t.command("HSET", redis.Args{job.key(), "status", string(newStatus)}, nil)
 	t.moveJobToStatusSet(job, oldStatus, newStatus)
 }
 
@@ -255,15 +251,13 @@ func (t *transaction) moveJobToStatusSet(job *Job, oldStatus, newStatus JobStatu
 // addJobtoStatusSet adds commands to the transaction which will add
 // the job to the status set corresponding to status
 func (t *transaction) addJobToStatusSet(job *Job, status JobStatus) {
-	args := redis.Args{status.key(), job.priority, job.id}
-	t.command("ZADD", args, nil)
+	t.command("ZADD", redis.Args{status.key(), job.priority, job.id}, nil)
 }
 
 // removeJobFromStatusSet adds commands to the transaction which will remove
 // the job from the status set corresponding to status
 func (t *transaction) removeJobFromStatusSet(job *Job, status JobStatus) {
-	args := redis.Args{status.key(), job.id}
-	t.command("ZREM", args, nil)
+	t.command("ZREM", redis.Args{status.key(), job.id}, nil)
 }
 
 // mainHashArgs returns the args for the hash which will store the job data

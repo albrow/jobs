@@ -28,8 +28,7 @@ func (w *worker) start() {
 			// Set the started field and save the job
 			job.started = time.Now().UTC().UnixNano()
 			t0 := newTransaction()
-			args0 := redis.Args{job.key(), "started", job.started}
-			t0.command("HSET", args0, nil)
+			t0.command("HSET", redis.Args{job.key(), "started", job.started}, nil)
 			if err := t0.exec(); err != nil {
 				// TODO: set the job status to StatusError instead of panicking
 				panic(err)
@@ -51,13 +50,11 @@ func (w *worker) start() {
 			// Set the finished timestamp
 			job.finished = time.Now().UTC().UnixNano()
 			t1 := newTransaction()
-			redisArgs := redis.Args{job.key(), "finished", job.finished}
-			t1.command("HSET", redisArgs, nil)
+			t1.command("HSET", redis.Args{job.key(), "finished", job.finished}, nil)
 			if job.isRecurring() {
 				// If the job is recurring, reschedule and set status to queued
 				job.time = job.nextTime()
-				redisArgs = redis.Args{job.key(), "time", job.time}
-				t1.command("HSET", redisArgs, nil)
+				t1.command("HSET", redis.Args{job.key(), "time", job.time}, nil)
 				t1.addJobToTimeIndex(job)
 				t1.setJobStatus(job, job.status, StatusQueued)
 			} else {

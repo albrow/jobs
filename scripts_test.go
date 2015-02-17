@@ -55,3 +55,60 @@ func TestGetAndMoveJobsToExecutingScript(t *testing.T) {
 		t.Errorf("Ids in the queued set were incorrect.\n\tExpected: %v\n\tBut got:  %v", expectedQueued, gotQueued)
 	}
 }
+
+func TestDecrJobRetriesScript(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	testJob, err := RegisterJobType("testJob", func() {})
+	if err != nil {
+		t.Errorf("Unexpected error registering job type: %s", err.Error())
+	}
+
+	// We'll use table-driven tests here
+	testCases := []struct {
+		job             *Job
+		expectedReturn  bool
+		expectedRetries int
+	}{
+		{
+			// One job will start with 2 retries remaining
+			job:             &Job{typ: testJob, id: "retriesRemainingJob", retries: 2},
+			expectedReturn:  true,
+			expectedRetries: 1,
+		},
+		{
+			// One job will start with 0 retries remaining
+			job:             &Job{typ: testJob, id: "noRetriesJob", retries: 0},
+			expectedReturn:  false,
+			expectedRetries: 0,
+		},
+	}
+
+	// We can test all of the cases in a single transaction
+	tx := newTransaction()
+	gotReturns := make([]bool, len(testCases))
+	gotRetries := make([]int, len(testCases))
+	for i, tc := range testCases {
+		// Save the job
+		tx.saveJob(tc.job)
+		// Run the script and save the return value in a slice
+		tx.script(decrJobRetries, redis.Args{tc.job.key()}, newScanBoolHandler(&(gotReturns[i])))
+		// Get the new number of retries from the database and save the value in a slice
+		tx.command("HGET", redis.Args{tc.job.key(), "retries"}, newScanIntHandler(&(gotRetries[i])))
+	}
+	// Execute the transaction
+	if err := tx.exec(); err != nil {
+		t.Errorf("Unexpected error executing transaction: %s", err.Error())
+	}
+
+	// Iterate through test cases again and check the results
+	for i, tc := range testCases {
+		if gotReturns[i] != tc.expectedReturn {
+			t.Errorf("Return value from script was incorrect for test case %d (job:%s). Expected %v but got %v", i, tc.job.id, tc.expectedReturn, gotReturns[i])
+		}
+		if gotRetries[i] != tc.expectedRetries {
+			t.Errorf("Number of retries after executing script was incorrect for test case %d (job:%s). Expected %v but got %v", i, tc.job.id, tc.expectedRetries, gotRetries[i])
+		}
+	}
+}

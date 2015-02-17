@@ -141,12 +141,60 @@ func (t *transaction) debugSet(setName string) {
 func newScanStringsHandler(strings *[]string) replyHandler {
 	return func(reply interface{}) error {
 		if strings == nil {
-			return fmt.Errorf("zazu: Error in scanStringsHandler: expected strings arg to be a pointer to a slice of strings but it was nil")
+			return fmt.Errorf("zazu: Error in newScanStringsHandler: expected strings arg to be a pointer to a slice of strings but it was nil")
 		}
 		var err error
 		(*strings), err = redis.Strings(reply, nil)
 		if err != nil {
-			return fmt.Errorf("zazu: Error in scanStringsHandler: %s", err.Error())
+			return fmt.Errorf("zazu: Error in newScanStringsHandler: %s", err.Error())
+		}
+		return nil
+	}
+}
+
+// newScanStringHandler returns a replyHandler which, when run, will convert reply to a
+// string and scan it into s.
+func newScanStringHandler(s *string) replyHandler {
+	return func(reply interface{}) error {
+		if s == nil {
+			return fmt.Errorf("zazu: Error in newScanStringHandler: expected arg s to be a pointer to a string but it was nil")
+		}
+		var err error
+		(*s), err = redis.String(reply, nil)
+		if err != nil {
+			return fmt.Errorf("zazu: Error in newScanStringHandler: %s", err.Error())
+		}
+		return nil
+	}
+}
+
+// newScanIntHandler returns a replyHandler which, when run, will convert reply to a
+// int and scan it into i.
+func newScanIntHandler(i *int) replyHandler {
+	return func(reply interface{}) error {
+		if i == nil {
+			return fmt.Errorf("zazu: Error in newScanIntHandler: expected arg s to be a pointer to a string but it was nil")
+		}
+		var err error
+		(*i), err = redis.Int(reply, nil)
+		if err != nil {
+			return fmt.Errorf("zazu: Error in newScanIntHandler: %s", err.Error())
+		}
+		return nil
+	}
+}
+
+// newScanBoolHandler returns a replyHandler which, when run, will convert reply to a
+// bool and scan it into b.
+func newScanBoolHandler(b *bool) replyHandler {
+	return func(reply interface{}) error {
+		if b == nil {
+			return fmt.Errorf("zazu: Error in newScanBoolHandler: expected arg v to be a pointer to a bool but it was nil")
+		}
+		var err error
+		(*b), err = redis.Bool(reply, nil)
+		if err != nil {
+			return fmt.Errorf("zazu: Error in newScanBoolHandler: %s", err.Error())
 		}
 		return nil
 	}

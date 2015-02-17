@@ -6,15 +6,24 @@ import (
 )
 
 type transaction struct {
-	conn     redis.Conn
-	commands []command
-	handlers []func(interface{}) error
+	conn    redis.Conn
+	actions []*action
 }
 
-type command struct {
-	name string
-	args redis.Args
+type action struct {
+	kind    actionKind
+	name    string
+	script  *redis.Script
+	args    redis.Args
+	handler replyHandler
 }
+
+type actionKind int
+
+const (
+	actionCommand = iota
+	actionScript
+)
 
 type replyHandler func(interface{}) error
 
@@ -25,47 +34,80 @@ func newTransaction() *transaction {
 	return t
 }
 
-func (t *transaction) command(cmd string, args redis.Args, handler replyHandler) {
-	t.commands = append(t.commands, command{name: cmd, args: args})
-	t.handlers = append(t.handlers, handler)
+func (t *transaction) command(name string, args redis.Args, handler replyHandler) {
+	t.actions = append(t.actions, &action{
+		kind:    actionCommand,
+		name:    name,
+		args:    args,
+		handler: handler,
+	})
+}
+
+func (t *transaction) script(script *redis.Script, args redis.Args, handler replyHandler) {
+	t.actions = append(t.actions, &action{
+		kind:    actionScript,
+		script:  script,
+		args:    args,
+		handler: handler,
+	})
+}
+
+func (t *transaction) sendAction(a *action) error {
+	switch a.kind {
+	case actionCommand:
+		return t.conn.Send(a.name, a.args...)
+	case actionScript:
+		return a.script.Send(t.conn, a.args...)
+	}
+	return nil
+}
+
+func (t *transaction) doAction(a *action) (interface{}, error) {
+	switch a.kind {
+	case actionCommand:
+		return t.conn.Do(a.name, a.args...)
+	case actionScript:
+		return a.script.Do(t.conn, a.args...)
+	}
+	return nil, nil
 }
 
 func (t *transaction) exec() error {
 	// Return the connection to the pool when we are done
 	defer t.conn.Close()
 
-	if len(t.commands) == 1 {
+	if len(t.actions) == 1 {
 		// If there is only one command, no need to use MULTI/EXEC
-		c := t.commands[0]
-		reply, err := t.conn.Do(c.name, c.args...)
+		a := t.actions[0]
+		reply, err := t.doAction(a)
 		if err != nil {
 			return err
 		}
-		if t.handlers[0] != nil {
-			if err := t.handlers[0](reply); err != nil {
+		if a.handler != nil {
+			if err := a.handler(reply); err != nil {
 				return err
 			}
 		}
 	} else {
-		// Send all the pending commands at once using MULTI/EXEC
+		// Send all the commands and scripts at once using MULTI/EXEC
 		t.conn.Send("MULTI")
-		for _, c := range t.commands {
-			if err := t.conn.Send(c.name, c.args...); err != nil {
+		for _, a := range t.actions {
+			if err := t.sendAction(a); err != nil {
 				return err
 			}
 		}
 
 		// Invoke redis driver to execute the transaction
-		replies, err := redis.MultiBulk(t.conn.Do("EXEC"))
+		replies, err := redis.Values(t.conn.Do("EXEC"))
 		if err != nil {
 			return err
 		}
 
 		// Iterate through the replies, calling the corresponding handler functions
 		for i, reply := range replies {
-			handler := t.handlers[i]
-			if handler != nil {
-				if err := handler(reply); err != nil {
+			a := t.actions[i]
+			if a.handler != nil {
+				if err := a.handler(reply); err != nil {
 					return err
 				}
 			}

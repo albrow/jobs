@@ -26,7 +26,7 @@ func TestGetAndMoveJobsToExecutingScript(t *testing.T) {
 	// Start a new transaction and execute the script
 	tx1 := newTransaction()
 	gotIds := []string{}
-	tx1.script(getAndMoveJobsToExecuting, redis.Args{jobsReadyAndSortedKey, StatusQueued.key(), StatusExecuting.key()}, newScanStringsHandler(&gotIds))
+	tx1.script(getAndMoveJobsToExecutingScript, redis.Args{jobsReadyAndSortedKey}, newScanStringsHandler(&gotIds))
 	if err := tx1.exec(); err != nil {
 		t.Errorf("Unexpected error executing transaction: %s", err.Error())
 	}
@@ -56,7 +56,7 @@ func TestGetAndMoveJobsToExecutingScript(t *testing.T) {
 	}
 }
 
-func TestDecrJobRetriesScript(t *testing.T) {
+func TestRetryOrFailJobScript(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
@@ -93,7 +93,7 @@ func TestDecrJobRetriesScript(t *testing.T) {
 		// Save the job
 		tx.saveJob(tc.job)
 		// Run the script and save the return value in a slice
-		tx.script(retryOrFailJob, redis.Args{tc.job.key(), tc.job.id, tc.job.priority, StatusExecuting.key(), StatusQueued.key(), StatusFailed.key()}, newScanBoolHandler(&(gotReturns[i])))
+		tx.script(retryOrFailJobScript, redis.Args{tc.job.key(), tc.job.id, tc.job.priority}, newScanBoolHandler(&(gotReturns[i])))
 		// Get the new number of retries from the database and save the value in a slice
 		tx.command("HGET", redis.Args{tc.job.key(), "retries"}, newScanIntHandler(&(gotRetries[i])))
 	}

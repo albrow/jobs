@@ -157,70 +157,52 @@ func (wp *workerPoolType) sendNextJobs(n int) error {
 }
 
 func getNextJobs(n int) ([]*Job, error) {
-	// TODO: use lua scripting here to preserve absolute atomicity
-	conn := redisPool.Get()
-	defer conn.Close()
-	// First get the ids of jobs which are currently ready to execute based on
-	// their time parameter.
-	currentTime := time.Now().UTC().UnixNano()
-	timeReadyJobIds, err := redis.Values(conn.Do("ZRANGEBYSCORE", keys.jobsTimeIndex, "-inf", currentTime))
-	if err != nil {
-		return nil, err
-	}
-	conn.Close()
-	// If no jobs are ready based on their time, just return
-	if len(timeReadyJobIds) == 0 {
-		return nil, nil
-	}
 	// Start the first transaction, which gets the ids of jobs which are ready to execute
 	// based on their time parameter whether or not they are in the queued set.
 	t0 := newTransaction()
-	// Store the ids from the time index query in their own temporary set, which has a unique name
+
+	// Copy the time index set to a new set with a temporary name
 	jobsReadyByTimeKey := jobsReadyByTime.generateKey()
-	args := redis.Args{jobsReadyByTimeKey}
-	for _, jobId := range timeReadyJobIds {
-		args = args.Add(0, jobId)
-	}
-	t0.command("ZADD", args, nil)
+	t0.command("ZUNIONSTORE", redis.Args{jobsReadyByTimeKey, 1, keys.jobsTimeIndex}, nil)
+
+	// Trim the new temporary set we created to leave only the jobs which have a time parameter in the past
+	currentTime := time.Now().UTC().UnixNano()
+	t0.command("ZREMRANGEBYSCORE", redis.Args{jobsReadyByTimeKey, currentTime, "+inf"}, nil)
+
 	// Intersect the jobs which are ready based on their time with those in the
 	// queued set. Store the results in a temporary set.
 	jobsReadyAndSortedKey := jobsReadyAndSorted.generateKey()
-	args = redis.Args{jobsReadyAndSortedKey, 2, StatusQueued.key(), jobsReadyByTimeKey}
-	t0.command("ZINTERSTORE", args, nil)
+	t0.command("ZINTERSTORE", redis.Args{jobsReadyAndSortedKey, 2, StatusQueued.key(), jobsReadyByTimeKey, "WEIGHTS", 1, 0}, nil)
+
 	// Trim the jobs:readyAndSorted set, so it contains only the first n jobs ordered by
 	// priority
-	args = redis.Args{jobsReadyAndSortedKey, 0, -n - 1}
-	t0.command("ZREMRANGEBYRANK", args, nil)
+	t0.command("ZREMRANGEBYRANK", redis.Args{jobsReadyAndSortedKey, 0, -n - 1}, nil)
+
 	// Get all the jobs from the jobs:readyAndSorted set, which contains the next n jobs that
 	// are ready based on their time parameter sorted by priority.
 	jobIds := []string{}
-	args = redis.Args{jobsReadyAndSortedKey, 0, -1}
-	t0.command("ZREVRANGE", args, newScanStringsHandler(&jobIds))
-	// Add the jobs to the executing set using ZUNIONINTERSTORE
-	args = redis.Args{StatusExecuting.key(), 2, jobsReadyAndSortedKey, StatusExecuting.key()}
-	t0.command("ZUNIONSTORE", args, nil)
-	// Remove the jobs from the queued set
-	args = redis.Args{StatusQueued.key(), -n, -1}
-	t0.command("ZREMRANGEBYRANK", args, nil)
+	t0.script(getAndMoveJobsToExecuting, redis.Args{jobsReadyAndSortedKey, StatusQueued.key(), StatusExecuting.key()}, newScanStringsHandler(&jobIds))
+
 	// Delete the temporary sets we created for intersecting
-	args = redis.Args{jobsReadyByTimeKey, jobsReadyAndSortedKey}
-	t0.command("DEL", args, nil)
+	t0.command("DEL", redis.Args{jobsReadyByTimeKey, jobsReadyAndSortedKey}, nil)
+
 	// Execute the transaction
 	if err := t0.exec(); err != nil {
 		return nil, err
 	}
+
 	// Start the second transaction, which gets all the other data for the job ids we have
 	t1 := newTransaction()
 	jobs := []*Job{}
 	for _, jobId := range jobIds {
 		// Add a command to set the status to executing
 		job := &Job{id: jobId}
-		args := redis.Args{job.key(), "status", string(StatusExecuting)}
-		t1.command("HSET", args, nil)
+		t1.command("HSET", redis.Args{job.key(), "status", string(StatusExecuting)}, nil)
 		// Add a command to get the job fields from its hash in the database
 		t1.scanJobById(job.id, job)
 		jobs = append(jobs, job)
 	}
+
 	// Execute the transaction
 	if err := t1.exec(); err != nil {
 		return nil, err

@@ -395,7 +395,7 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 		case <-timeout:
 			// More than 1 second has passed. Assume something went wrong.
 			t.Errorf("1 second passed and %d jobs were not executed.", remainingJobs)
-			break
+			t.FailNow()
 		case <-interval:
 			// Count the number of elements in data that equal "ok".
 			// Anything that doesn't equal ok represents a job that hasn't been executed yet

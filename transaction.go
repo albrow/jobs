@@ -124,6 +124,18 @@ func newScanJobHandler(job *Job) replyHandler {
 	}
 }
 
+// debug set simply prints out the value of the given set
+func (t *transaction) debugSet(setName string) {
+	t.command("ZRANGE", redis.Args{setName, 0, -1, "WITHSCORES"}, func(reply interface{}) error {
+		vals, err := redis.Strings(reply, nil)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s: %v\n", setName, vals)
+		return nil
+	})
+}
+
 // newScanStringsHandler returns a replyHandler which, when run, will scan the values
 // of reply into strings.
 func newScanStringsHandler(strings *[]string) replyHandler {

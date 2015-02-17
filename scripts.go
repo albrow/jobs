@@ -20,7 +20,7 @@ var getAndMoveJobsToExecuting = redis.NewScript(3, `
 	local executingSet = KEYS[3]
 	-- Get all job ids from the readyAndSortedSet
 	local jobIds = redis.call('ZREVRANGE', readyAndSortedSet, 0, -1)
-	if jobIds ~= nil then
+	if #jobIds > 0 then
 		-- Add job ids to the executing set
 		redis.call('ZUNIONSTORE', executingSet, 2, executingSet, readyAndSortedSet)
 		-- Remove job ids from the queued set

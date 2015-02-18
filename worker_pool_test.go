@@ -1,6 +1,7 @@
 package zazu
 
 import (
+	"errors"
 	"github.com/dustin/go-humanize"
 	"reflect"
 	"runtime"
@@ -471,6 +472,12 @@ func TestRecurringJob(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
+	defer func() {
+		// Close the pool and wait for workers to finish
+		Pool.Close()
+		Pool.Wait()
+	}()
+
 	// Register a job type which will simply send through to a channel
 	jobFinished := make(chan bool)
 	signalJob, err := RegisterJobType("signalJob", func() {
@@ -533,7 +540,48 @@ OuterLoop:
 			t.FailNow()
 		}
 	}
+}
 
+// TestJobFail creates and executes a job that is guaranteed to fail, then tests that
+// the error was captured and stored correctly and that the job is in the failed set
+func TestJobFail(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	// Register a job type which will do nothing but sleep for some duration
+	failJob, err := RegisterJobType("failJob", func(msg string) {
+		panic(errors.New(msg))
+	})
+	if err != nil {
+		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+	}
+
+	// Queue up a single job
+	failMsg := "Test Job Failed!"
+	job, err := failJob.Schedule(100, time.Now(), failMsg)
+	if err != nil {
+		t.Errorf("Unexpected error in failJob.Schedule(): %s", err.Error())
+	}
+
+	// Start the pool with 1 worker
+	runtime.GOMAXPROCS(1)
+	Config.Pool.NumWorkers = 1
+	Config.Pool.BatchSize = 1
+	Pool.Start()
+
+	// Immediately stop the pool and wait for workers to finish
+	Pool.Close()
+	Pool.Wait()
+
+	// Update our copy of the job
+	if err := job.Refresh(); err != nil {
+		t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
+	}
+
+	// Make sure that the error field is correct and that the job was
+	// moved to the failed set
+	assertJobFieldEquals(t, job, "error", failMsg, stringConverter)
+	assertJobStatusEquals(t, job, StatusFailed)
 }
 
 // assertTestDataOk reports an error if any elements in data do not equal "ok". It is only used for

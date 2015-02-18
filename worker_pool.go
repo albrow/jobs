@@ -1,6 +1,7 @@
 package zazu
 
 import (
+	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"reflect"
 	"sync"
@@ -25,49 +26,74 @@ type worker struct {
 func (w *worker) start() {
 	go func() {
 		for job := range w.jobs {
-			// Set the started field and save the job
-			job.started = time.Now().UTC().UnixNano()
-			t0 := newTransaction()
-			t0.command("HSET", redis.Args{job.key(), "started", job.started}, nil)
-			if err := t0.exec(); err != nil {
-				// TODO: set the job status to StatusError instead of panicking
-				panic(err)
-			}
-			// Use reflection to instantiate arguments for the handler
-			handlerArgs := []reflect.Value{}
-			if job.typ.dataType != nil {
-				// Instantiate a new variable to hold this argument
-				dataVal := reflect.New(job.typ.dataType)
-				if err := decode(job.data, dataVal.Interface()); err != nil {
-					// TODO: set the job status to StatusError instead of panicking
-					panic(err)
-				}
-				handlerArgs = append(handlerArgs, dataVal.Elem())
-			}
-			// Call the handler using the arguments we just instantiated
-			handlerVal := reflect.ValueOf(job.typ.handler)
-			handlerVal.Call(handlerArgs)
-			// Set the finished timestamp
-			job.finished = time.Now().UTC().UnixNano()
-			t1 := newTransaction()
-			t1.command("HSET", redis.Args{job.key(), "finished", job.finished}, nil)
-			if job.isRecurring() {
-				// If the job is recurring, reschedule and set status to queued
-				job.time = job.nextTime()
-				t1.command("HSET", redis.Args{job.key(), "time", job.time}, nil)
-				t1.addJobToTimeIndex(job)
-				t1.setJobStatus(job, job.status, StatusQueued)
-			} else {
-				// Otherwise, set status to finished
-				t1.setJobStatus(job, job.status, StatusFinished)
-			}
-			if err := t1.exec(); err != nil {
-				// TODO: set the job status to StatusError instead of panicking
-				panic(err)
-			}
+			w.doJob(job)
 		}
 		w.wg.Done()
 	}()
+}
+
+func (w *worker) doJob(job *Job) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Get a reasonable error message from the panic
+			msg := ""
+			if err, ok := r.(error); ok {
+				msg = err.Error()
+			} else {
+				msg = fmt.Sprint(r)
+			}
+			// Start a new transaction
+			t := newTransaction()
+			// Set the job error field
+			t.command("HSET", redis.Args{job.key(), "error", msg}, nil)
+			// Either queue the job for retry or mark it as failed depending
+			// on how many retries the job has left
+			t.retryOrFailJob(job, nil)
+			if err := t.exec(); err != nil {
+				panic(err)
+			}
+		}
+	}()
+	// Set the started field and save the job
+	job.started = time.Now().UTC().UnixNano()
+	t0 := newTransaction()
+	t0.command("HSET", redis.Args{job.key(), "started", job.started}, nil)
+	if err := t0.exec(); err != nil {
+		// NOTE: panics will be caught by the recover statment above
+		panic(err)
+	}
+	// Use reflection to instantiate arguments for the handler
+	handlerArgs := []reflect.Value{}
+	if job.typ.dataType != nil {
+		// Instantiate a new variable to hold this argument
+		dataVal := reflect.New(job.typ.dataType)
+		if err := decode(job.data, dataVal.Interface()); err != nil {
+			// NOTE: panics will be caught by the recover statment above
+			panic(err)
+		}
+		handlerArgs = append(handlerArgs, dataVal.Elem())
+	}
+	// Call the handler using the arguments we just instantiated
+	handlerVal := reflect.ValueOf(job.typ.handler)
+	handlerVal.Call(handlerArgs)
+	// Set the finished timestamp
+	job.finished = time.Now().UTC().UnixNano()
+	t1 := newTransaction()
+	t1.command("HSET", redis.Args{job.key(), "finished", job.finished}, nil)
+	if job.isRecurring() {
+		// If the job is recurring, reschedule and set status to queued
+		job.time = job.nextTime()
+		t1.command("HSET", redis.Args{job.key(), "time", job.time}, nil)
+		t1.addJobToTimeIndex(job)
+		t1.setJobStatus(job, job.status, StatusQueued)
+	} else {
+		// Otherwise, set status to finished
+		t1.setJobStatus(job, job.status, StatusFinished)
+	}
+	if err := t1.exec(); err != nil {
+		// NOTE: panics will be caught by the recover statment above
+		panic(err)
+	}
 }
 
 // workerPoolType is the type of Pool. End users should not instantiate

@@ -31,7 +31,7 @@ func TestJobSave(t *testing.T) {
 	assertJobFieldEquals(t, job, "priority", job.priority, intConverter)
 	assertJobFieldEquals(t, job, "started", job.started, int64Converter)
 	assertJobFieldEquals(t, job, "finished", job.finished, int64Converter)
-	assertJobFieldEquals(t, job, "retries", job.retries, intConverter)
+	assertJobFieldEquals(t, job, "retries", job.retries, uintConverter)
 
 	// Make sure the job status was correct
 	assertJobStatusEquals(t, job, StatusSaved)

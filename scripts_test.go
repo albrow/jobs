@@ -60,7 +60,7 @@ func TestRetryOrFailJobScript(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
-	testJob, err := RegisterJobType("testJob", func() {})
+	testJob, err := RegisterJobType("testJob", 0, func() {})
 	if err != nil {
 		t.Errorf("Unexpected error registering job type: %s", err.Error())
 	}

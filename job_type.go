@@ -12,6 +12,7 @@ var jobTypes = map[string]*JobType{}
 type JobType struct {
 	name     string
 	handler  interface{}
+	retries  uint
 	dataType reflect.Type
 }
 
@@ -27,7 +28,7 @@ func NewErrorNameAlreadyRegistered(name string) ErrorNameAlreadyRegistered {
 	return ErrorNameAlreadyRegistered{name: name}
 }
 
-func RegisterJobType(name string, handler interface{}) (*JobType, error) {
+func RegisterJobType(name string, retries uint, handler interface{}) (*JobType, error) {
 	// Make sure name is unique
 	if _, found := jobTypes[name]; found {
 		return jobTypes[name], NewErrorNameAlreadyRegistered(name)
@@ -43,6 +44,7 @@ func RegisterJobType(name string, handler interface{}) (*JobType, error) {
 	jobType := &JobType{
 		name:    name,
 		handler: handler,
+		retries: retries,
 	}
 	if handlerType.NumIn() == 1 {
 		jobType.dataType = handlerType.In(0)
@@ -66,6 +68,7 @@ func (jt *JobType) Schedule(priority int, time time.Time, data interface{}) (*Jo
 		data:     encodedData,
 		typ:      jt,
 		time:     time.UTC().UnixNano(),
+		retries:  jt.retries,
 		priority: priority,
 	}
 	// Set the job's status to queued, save it in the database, and add it to the queued set
@@ -90,6 +93,7 @@ func (jt *JobType) ScheduleRecurring(priority int, time time.Time, freq time.Dur
 		data:     encodedData,
 		typ:      jt,
 		time:     time.UTC().UnixNano(),
+		retries:  jt.retries,
 		freq:     freq.Nanoseconds(),
 		priority: priority,
 	}

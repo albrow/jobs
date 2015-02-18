@@ -15,7 +15,7 @@ type Job struct {
 	freq     int64
 	priority int
 	err      error
-	retries  int
+	retries  uint
 	started  int64
 	finished int64
 }
@@ -329,7 +329,7 @@ func scanJob(reply interface{}, job *Job) error {
 				return err
 			}
 		case "retries":
-			if err := scanInt(fieldValue, &(job.retries)); err != nil {
+			if err := scanUint(fieldValue, &(job.retries)); err != nil {
 				return err
 			}
 		case "status":
@@ -360,6 +360,18 @@ func scanInt(reply interface{}, v *int) error {
 		return fmt.Errorf("zazu: In scanInt: Could not convert %v of type %T to int.", reply, reply)
 	}
 	(*v) = val
+	return nil
+}
+
+func scanUint(reply interface{}, v *uint) error {
+	if v == nil {
+		return fmt.Errorf("zazu: In scanUint: argument v was nil")
+	}
+	val, err := redis.Uint64(reply, nil)
+	if err != nil {
+		return fmt.Errorf("zazu: In scanUint: Could not convert %v of type %T to uint.", reply, reply)
+	}
+	(*v) = uint(val)
 	return nil
 }
 

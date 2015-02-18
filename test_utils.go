@@ -37,7 +37,7 @@ func flushdb() {
 func createTestJob() (*Job, error) {
 	// Register the "testJobType"
 	jobTypeName := "testJobType"
-	jobType, err := RegisterJobType(jobTypeName, func() {})
+	jobType, err := RegisterJobType(jobTypeName, 0, func() {})
 	if err != nil {
 		if _, ok := err.(ErrorNameAlreadyRegistered); !ok {
 			// If the name was already registered, that's fine.
@@ -93,6 +93,13 @@ var (
 	}
 	intConverter replyConverter = func(in interface{}) (interface{}, error) {
 		return redis.Int(in, nil)
+	}
+	uintConverter replyConverter = func(in interface{}) (interface{}, error) {
+		v, err := redis.Uint64(in, nil)
+		if err != nil {
+			return nil, err
+		}
+		return uint(v), nil
 	}
 	stringConverter replyConverter = func(in interface{}) (interface{}, error) {
 		return redis.String(in, nil)

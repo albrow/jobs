@@ -2,6 +2,7 @@ package zazu
 
 import (
 	"errors"
+	"fmt"
 	"github.com/dustin/go-humanize"
 	"reflect"
 	"runtime"
@@ -83,7 +84,7 @@ func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 	// jobsCanExit signals all jobs to exit when closed
 	jobsCanExit := make(chan bool)
 	data := make([]string, 4)
-	setStringJob, err := RegisterJobType("setString", func(i int) {
+	setStringJob, err := RegisterJobType("setString", 0, func(i int) {
 		data[i] = "ok"
 		waitForJobs.Done()
 		// Wait for the signal before returning from this function
@@ -136,7 +137,7 @@ func TestExecuteJobWithNoArguments(t *testing.T) {
 
 	// Register a job type with a handler that expects 0 arguments
 	data := ""
-	setOkayJob, err := RegisterJobType("setOkay", func() {
+	setOkayJob, err := RegisterJobType("setOkay", 0, func() {
 		data = "ok"
 	})
 	if err != nil {
@@ -174,7 +175,7 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 
 	// Register some jobs which will simply set one of the values in data
 	data := make([]string, 8)
-	setStringJob, err := RegisterJobType("setString", func(i int) {
+	setStringJob, err := RegisterJobType("setString", 0, func(i int) {
 		data[i] = "ok"
 	})
 	if err != nil {
@@ -241,7 +242,7 @@ func TestJobsOnlyExecutedOnce(t *testing.T) {
 	// Register some jobs which will simply increment one of the values in data
 	data := make([]int, 4)
 	waitForJobs := sync.WaitGroup{}
-	incrementJob, err := RegisterJobType("increment", func(i int) {
+	incrementJob, err := RegisterJobType("increment", 0, func(i int) {
 		data[i] += 1
 		waitForJobs.Done()
 	})
@@ -297,7 +298,7 @@ func TestAllJobsExecuted(t *testing.T) {
 	// Register some jobs which will simply set one of the elements in
 	// data to "ok"
 	data := make([]string, 100)
-	setStringJob, err := RegisterJobType("setString", func(i int) {
+	setStringJob, err := RegisterJobType("setString", 0, func(i int) {
 		data[i] = "ok"
 	})
 	if err != nil {
@@ -362,7 +363,7 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 	// For this test, we want to execute two jobs at a time, so we'll
 	// use a waitgroup.
 	data := make([]string, 4)
-	setStringJob, err := RegisterJobType("setString", func(i int) {
+	setStringJob, err := RegisterJobType("setString", 0, func(i int) {
 		data[i] = "ok"
 	})
 	if err != nil {
@@ -426,7 +427,7 @@ func TestJobTimestamps(t *testing.T) {
 	defer testingTeardown()
 
 	// Register a job type which will do nothing but sleep for some duration
-	sleepJob, err := RegisterJobType("sleep", func(d time.Duration) {
+	sleepJob, err := RegisterJobType("sleep", 0, func(d time.Duration) {
 		time.Sleep(d)
 	})
 	if err != nil {
@@ -480,7 +481,7 @@ func TestRecurringJob(t *testing.T) {
 
 	// Register a job type which will simply send through to a channel
 	jobFinished := make(chan bool)
-	signalJob, err := RegisterJobType("signalJob", func() {
+	signalJob, err := RegisterJobType("signalJob", 0, func() {
 		jobFinished <- true
 	})
 	if err != nil {
@@ -549,7 +550,7 @@ func TestJobFail(t *testing.T) {
 	defer testingTeardown()
 
 	// Register a job type which will do nothing but sleep for some duration
-	failJob, err := RegisterJobType("failJob", func(msg string) {
+	failJob, err := RegisterJobType("failJob", 0, func(msg string) {
 		panic(errors.New(msg))
 	})
 	if err != nil {
@@ -582,6 +583,71 @@ func TestJobFail(t *testing.T) {
 	// moved to the failed set
 	assertJobFieldEquals(t, job, "error", failMsg, stringConverter)
 	assertJobStatusEquals(t, job, StatusFailed)
+}
+
+// TestRetryJob creates and executes a job that is guaranteed to fail, then tests that
+// the job is tried some number of times before finally failing.
+func TestRetryJob(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	defer func() {
+		// Close the pool and wait for workers to finish
+		Pool.Close()
+		Pool.Wait()
+	}()
+
+	// Register a job type which will increment a counter with the number of tries
+	tries := uint(0)
+	triesMut := sync.Mutex{}
+	retries := uint(5)
+	expectedTries := retries + 1
+	jobFailed := make(chan bool)
+	countTriesJob, err := RegisterJobType("countTriesJob", retries, func() {
+		triesMut.Lock()
+		tries += 1
+		done := tries == expectedTries
+		triesMut.Unlock()
+		if done {
+			jobFailed <- true
+		}
+		msg := fmt.Sprintf("job failed on the %s try", humanize.Ordinal(int(tries)))
+		panic(msg)
+	})
+	if err != nil {
+		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+	}
+
+	// Queue up a single job
+	if _, err := countTriesJob.Schedule(100, time.Now(), nil); err != nil {
+		t.Errorf("Unexpected error in countTriesJob.Schedule(): %s", err.Error())
+	}
+
+	// Start the pool with 4 workers
+	runtime.GOMAXPROCS(4)
+	Config.Pool.NumWorkers = 4
+	Config.Pool.BatchSize = 4
+	Config.Pool.MinWait = 2 * time.Millisecond
+	Pool.Start()
+
+	// Wait for the job failed signal, or timeout if we don't receive it within 1 second
+	timeout := time.After(1 * time.Second)
+OuterLoop:
+	for {
+		select {
+		case <-timeout:
+			// More than 1 second has passed. Assume something went wrong.
+			t.Errorf("1 second passed and the job never permanently failed. The job was tried %d times.", tries)
+			t.FailNow()
+		case <-jobFailed:
+			if tries != expectedTries {
+				t.Errorf("The job was not tried the right number of times. Expected %d but job was only tried %d times.", expectedTries, tries)
+			} else {
+				// The test should pass!
+				break OuterLoop
+			}
+		}
+	}
 }
 
 // assertTestDataOk reports an error if any elements in data do not equal "ok". It is only used for

@@ -2,7 +2,6 @@ package zazu
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"text/template"
 )
@@ -105,7 +104,6 @@ func init() {
 	if err := getAndMoveJobsToExecutingTmpl.Execute(getAndMoveJobsToExecutingBuff, constantKeys); err != nil {
 		panic(err)
 	}
-	fmt.Println(getAndMoveJobsToExecutingBuff.String())
 	getAndMoveJobsToExecutingScript = redis.NewScript(1, getAndMoveJobsToExecutingBuff.String())
 
 	// Set up the retryOrFailJobScript

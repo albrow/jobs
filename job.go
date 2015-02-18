@@ -188,7 +188,9 @@ func (j *Job) setError(err error) error {
 	j.err = err
 	t := newTransaction()
 	t.command("HSET", redis.Args{j.key(), "error", j.err.Error()}, nil)
-	t.moveJobToStatusSet(j, j.status, StatusFailed)
+	if err := t.exec(); err != nil {
+		return err
+	}
 	return nil
 }
 

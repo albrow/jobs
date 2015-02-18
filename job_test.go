@@ -1,6 +1,7 @@
 package zazu
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -161,6 +162,18 @@ func TestJobDestroy(t *testing.T) {
 		},
 	}
 	testJobStatePaths(t, statePaths)
+}
+
+func TestJobSetError(t *testing.T) {
+	job, err := createAndSaveTestJob()
+	if err != nil {
+		t.Errorf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
+	}
+	testErr := errors.New("Test Error")
+	if err := job.setError(testErr); err != nil {
+		t.Errorf("Unexpected error in job.setError(): %s", err.Error())
+	}
+	assertJobFieldEquals(t, job, "error", testErr.Error(), stringConverter)
 }
 
 // statePath represents a path through which a job can travel, where each step

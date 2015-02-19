@@ -1,3 +1,7 @@
+-- Copyright 2015 Alex Browne.  All rights reserved.
+-- Use of this source code is governed by the MIT
+-- license, which can be found in the LICENSE file.
+
 -- retry_or_fail_job represents a lua script that takes the following arguments:
 -- 	1) The id of the job to either retry or fail
 -- It first checks if the job has any retries remaining. If it does,

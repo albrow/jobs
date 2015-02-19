@@ -1,3 +1,7 @@
+-- Copyright 2015 Alex Browne.  All rights reserved.
+-- Use of this source code is governed by the MIT
+-- license, which can be found in the LICENSE file.
+
 -- set_job_status is a lua script that takes the following arguments:
 -- 	1) The id of the job
 -- 	2) The new status (e.g. "queued")

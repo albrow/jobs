@@ -63,30 +63,37 @@ var retryOrFailJobTmpl = template.Must(template.New("retryOrFailJobScript").Pars
 	-- Assign keys to variables for easy reference
 	local jobId = KEYS[1]
 	local jobKey = 'jobs:' .. jobId
-	-- Get the job priority (used as score)
-	local jobPriority = redis.call('HGET', jobKey, 'priority')
 	-- Check how many retries remain
 	local retries = redis.call('HGET', jobKey, 'retries')
-	if retries == "0" then
-		-- add the job to the failed set
-		redis.call('ZADD', '{{.failedSet}}', jobPriority, jobId)
-		-- remove the job from the executing set
-		redis.call('ZREM', '{{.executingSet}}', jobId)
-		-- Set the job status in the hash
-		redis.call('HSET', jobKey, 'status', '{{.statusFailed}}')
+	local newStatus = ''
+	if retries == '0' then
+		-- newStatus should be failed because there are no retries left
+		newStatus = '{{.statusFailed}}'
+	else
+		-- subtract 1 from the remaining retries
+		redis.call('HINCRBY', jobKey, 'retries', -1)
+		-- newStatus should be queued, so the job will be retried
+		newStatus = '{{.statusQueued}}'
+	end
+	-- Get the job priority (used as score)
+	local jobPriority = redis.call('HGET', jobKey, 'priority')
+	-- Add the job to the appropriate new set
+	local newStatusSet = 'jobs:' .. newStatus
+	redis.call('ZADD', newStatusSet, jobPriority, jobId)	
+	-- Remove the job from the old status set
+	local oldStatus = redis.call('HGET', jobKey, 'status')
+	if ((oldStatus ~= '') and (oldStatus ~= newStatus)) then
+		local oldStatusSet = 'jobs:' .. oldStatus
+		redis.call('ZREM', oldStatusSet, jobId)
+	end
+	-- Set the job status in the hash
+	redis.call('HSET', jobKey, 'status', newStatus)
+	if retries == '0' then
 		-- Return false to indicate the job has not been queued for retry
 		-- NOTE: 0 is used to represent false because apparently
 		-- false gets converted to nil
 		return 0
 	else
-		-- subtract 1 from the remaining retries
-		redis.call('HINCRBY', jobKey, 'retries', -1)
-		-- add the job to the queued set
-		redis.call('ZADD', '{{.queuedSet}}', jobPriority, jobId)
-		-- remove the job from the executing set
-		redis.call('ZREM', '{{.executingSet}}', jobId)
-		-- Set the job status in the hash
-		redis.call('HSET', jobKey, 'status', '{{.statusQueued}}')
 		-- Return true to indicate the job has been queued for retry
 		-- NOTE: 1 is used to represent true (for consistency)
 		return 1

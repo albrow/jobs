@@ -47,9 +47,7 @@ var getAndMoveJobsToExecutingTmpl = template.Must(template.New("getAndMoveJobsTo
 `))
 
 // retryOrFailJobTmpl represents a lua script that takes the following arguments:
-// 1) The key of the job to either retry or fail
-// 2) The id of the job to either retry or fail
-// 3) The priority of the job
+// 1) The id of the job to either retry or fail
 // It first checks if the job has any retries remaining. If it does,
 // then it:
 // 	1) Decrements the number of retries for the given job
@@ -62,9 +60,10 @@ var getAndMoveJobsToExecutingTmpl = template.Must(template.New("getAndMoveJobsTo
 // 	2) Returns false
 var retryOrFailJobTmpl = template.Must(template.New("retryOrFailJobScript").Parse(`
 	-- Assign keys to variables for easy reference
-	local jobKey = KEYS[1]
-	local jobId = KEYS[2]
-	local jobPriority = KEYS[3]
+	local jobId = KEYS[1]
+	local jobKey = 'jobs:' .. jobId
+	-- Get the job priority (used as score)
+	local jobPriority = redis.call('HGET', jobKey, 'priority')
 	-- Check how many retries remain
 	local retries = redis.call('HGET', jobKey, 'retries')
 	if retries == "0" then
@@ -138,7 +137,7 @@ func init() {
 	if err := retryOrFailJobTmpl.Execute(retryOrFailJobBuff, constantKeys); err != nil {
 		panic(err)
 	}
-	retryOrFailJobScript = redis.NewScript(3, retryOrFailJobBuff.String())
+	retryOrFailJobScript = redis.NewScript(1, retryOrFailJobBuff.String())
 
 	// Set up the setJobStatusScript
 	setJobStatusBuff := bytes.NewBuffer([]byte{})
@@ -157,7 +156,7 @@ func (t *transaction) getAndMoveJobsToExecuting(jobsReadyAndSortedKey string, ha
 // retryOrFailJob is a small function wrapper around retryOrFailJobScript.
 // It offers some type safety and helps make sure the arguments you pass through to the are correct.
 func (t *transaction) retryOrFailJob(job *Job, handler replyHandler) {
-	t.script(retryOrFailJobScript, redis.Args{job.key(), job.id, job.priority}, handler)
+	t.script(retryOrFailJobScript, redis.Args{job.id}, handler)
 }
 
 // setJobStatus is a small function wrapper around setJobStatusScript.

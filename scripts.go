@@ -93,9 +93,36 @@ var retryOrFailJobTmpl = template.Must(template.New("retryOrFailJobScript").Pars
 	end
 `))
 
+// setJobStatusTmpl represents a lua script that takes the following arguments:
+// 1) The id of the job
+// 2) The new status (e.g. "queued")
+// It then does the following:
+// 1) Adds the job to the new status set
+// 2) Removes the job from the old status set (which it gets with an HGET call)
+// 3) Sets the 'status' field in the main hash for the job
+var setJobStatusTmpl = template.Must(template.New("retryOrFailJobScript").Parse(`
+	-- Assign keys to variables for easy reference
+	local jobId = KEYS[1]
+	local newStatus = KEYS[2]
+	local jobKey = 'jobs:' .. jobId
+	local newStatusSet = 'jobs:' .. newStatus
+	-- Add the job to the new status set
+	local jobPriority = redis.call('HGET', jobKey, 'priority')
+	redis.call('ZADD', newStatusSet, jobPriority, jobId)
+	-- Remove the job from the old status set
+	local oldStatus = redis.call('HGET', jobKey, 'status')
+	if ((oldStatus ~= '') and (oldStatus ~= newStatus)) then
+		local oldStatusSet = 'jobs:' .. oldStatus
+		redis.call('ZREM', oldStatusSet, jobId)
+	end
+	-- Set the status field
+	redis.call('HSET', jobKey, 'status', newStatus)
+`))
+
 var (
 	getAndMoveJobsToExecutingScript *redis.Script
 	retryOrFailJobScript            *redis.Script
+	setJobStatusScript              *redis.Script
 )
 
 func init() {
@@ -112,6 +139,13 @@ func init() {
 		panic(err)
 	}
 	retryOrFailJobScript = redis.NewScript(3, retryOrFailJobBuff.String())
+
+	// Set up the setJobStatusScript
+	setJobStatusBuff := bytes.NewBuffer([]byte{})
+	if err := setJobStatusTmpl.Execute(setJobStatusBuff, constantKeys); err != nil {
+		panic(err)
+	}
+	setJobStatusScript = redis.NewScript(2, setJobStatusBuff.String())
 }
 
 // getAndMoveJobsToExecuting is a small function wrapper around getAndMovesJobToExecutingScript.
@@ -120,8 +154,14 @@ func (t *transaction) getAndMoveJobsToExecuting(jobsReadyAndSortedKey string, ha
 	t.script(getAndMoveJobsToExecutingScript, redis.Args{jobsReadyAndSortedKey}, handler)
 }
 
-// retryOrFailJob is a small function wrapper around getAndMovesJobToExecutingScript.
+// retryOrFailJob is a small function wrapper around retryOrFailJobScript.
 // It offers some type safety and helps make sure the arguments you pass through to the are correct.
 func (t *transaction) retryOrFailJob(job *Job, handler replyHandler) {
 	t.script(retryOrFailJobScript, redis.Args{job.key(), job.id, job.priority}, handler)
+}
+
+// setJobStatus is a small function wrapper around setJobStatusScript.
+// It offers some type safety and helps make sure the arguments you pass through to the are correct.
+func (t *transaction) setJobStatus(job *Job, status JobStatus) {
+	t.script(setJobStatusScript, redis.Args{job.id, string(status)}, nil)
 }

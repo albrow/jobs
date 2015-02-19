@@ -129,7 +129,7 @@ func (j *Job) save() error {
 }
 
 // saveJob adds commands to the transaction to set all the fields for the main hash for the job,
-// add the job to the time index, and, if necessary, move the job to the saved status set. It will
+// add the job to the time index, move the job to the appropriate status set. It will
 // also mutate the job by 1) generating an id if the id is empty and 2) setting the status to StatusSaved
 // if the status is empty.
 func (t *transaction) saveJob(job *Job) {
@@ -140,10 +140,11 @@ func (t *transaction) saveJob(job *Job) {
 	// Set status to saved if needed
 	if job.status == "" {
 		job.status = StatusSaved
-		t.addJobToStatusSet(job, StatusSaved)
 	}
-	// Add the Job attributes to a hash
+	// Add the job attributes to a hash
 	t.command("HMSET", job.mainHashArgs(), nil)
+	// Add the job to the appropriate status set
+	t.setJobStatus(job, job.status)
 	// Add the job to the time index
 	t.addJobToTimeIndex(job)
 }
@@ -217,7 +218,7 @@ func (j *Job) Destroy() error {
 }
 
 // setStatus updates the job's status in the database and moves it to the appropriate
-// set based on its new status.
+// status set.
 func (j *Job) setStatus(status JobStatus) error {
 	if j.id == "" {
 		return fmt.Errorf("zazu: Cannot set status to %s because job doesn't have an id.", status)
@@ -225,45 +226,14 @@ func (j *Job) setStatus(status JobStatus) error {
 	if j.status == StatusDestroyed {
 		return fmt.Errorf("zazu: Cannot set job:%s status to %s because it was destroyed.", j.id, status)
 	}
-	if j.status == status {
-		return nil
-	}
-	oldStatus := j.status
-	j.status = status
-	// Use a transaction to move the job to the appropriate status
+	// Use a transaction to move the job to the appropriate status set and set its status
 	t := newTransaction()
-	t.setJobStatus(j, oldStatus, status)
+	t.setJobStatus(j, status)
 	if err := t.exec(); err != nil {
 		return err
 	}
 	j.status = status
 	return nil
-}
-
-// setJobStatus adds commands to the transaction which will set the status field
-// in the main hash for the job and move it to the appropriate status set
-func (t *transaction) setJobStatus(job *Job, oldStatus, newStatus JobStatus) {
-	t.command("HSET", redis.Args{job.key(), "status", string(newStatus)}, nil)
-	t.moveJobToStatusSet(job, oldStatus, newStatus)
-}
-
-// moveJobToStatusSet adds commands to the transaction which will remove the
-// job from it's old status set and add it to the new status set
-func (t *transaction) moveJobToStatusSet(job *Job, oldStatus, newStatus JobStatus) {
-	t.addJobToStatusSet(job, newStatus)
-	t.removeJobFromStatusSet(job, oldStatus)
-}
-
-// addJobtoStatusSet adds commands to the transaction which will add
-// the job to the status set corresponding to status
-func (t *transaction) addJobToStatusSet(job *Job, status JobStatus) {
-	t.command("ZADD", redis.Args{status.key(), job.priority, job.id}, nil)
-}
-
-// removeJobFromStatusSet adds commands to the transaction which will remove
-// the job from the status set corresponding to status
-func (t *transaction) removeJobFromStatusSet(job *Job, status JobStatus) {
-	t.command("ZREM", redis.Args{status.key(), job.id}, nil)
 }
 
 // mainHashArgs returns the args for the hash which will store the job data

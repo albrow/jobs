@@ -71,12 +71,9 @@ func (jt *JobType) Schedule(priority int, time time.Time, data interface{}) (*Jo
 		retries:  jt.retries,
 		priority: priority,
 	}
-	// Set the job's status to queued, save it in the database, and add it to the queued set
-	t := newTransaction()
+	// Set the job's status to queued and save it in the database
 	job.status = StatusQueued
-	t.saveJob(job)
-	t.addJobToStatusSet(job, StatusQueued)
-	if err := t.exec(); err != nil {
+	if err := job.save(); err != nil {
 		return nil, err
 	}
 	return job, nil
@@ -97,12 +94,9 @@ func (jt *JobType) ScheduleRecurring(priority int, time time.Time, freq time.Dur
 		freq:     freq.Nanoseconds(),
 		priority: priority,
 	}
-	// Set the job's status to queued, save it in the database, and add it to the queued set
-	t := newTransaction()
+	// Set the job's status to queued and save it in the database
 	job.status = StatusQueued
-	t.saveJob(job)
-	t.addJobToStatusSet(job, StatusQueued)
-	if err := t.exec(); err != nil {
+	if err := job.save(); err != nil {
 		return nil, err
 	}
 	return job, nil

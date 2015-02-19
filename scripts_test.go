@@ -123,3 +123,29 @@ func TestRetryOrFailJobScript(t *testing.T) {
 		}
 	}
 }
+
+func TestSetJobStatusScript(t *testing.T) {
+	testingSetUp()
+	// defer testingTeardown()
+
+	job, err := createAndSaveTestJob()
+	if err != nil {
+		t.Errorf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
+	}
+
+	// For all possible statuses, execute the script and check that the job status was set correctly
+	for _, status := range possibleStatuses {
+		if status == StatusDestroyed {
+			continue
+		}
+		tx := newTransaction()
+		tx.setJobStatus(job, status)
+		if err := tx.exec(); err != nil {
+			t.Errorf("Unexpected error in tx.exec(): %s", err.Error())
+		}
+		if err := job.Refresh(); err != nil {
+			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
+		}
+		assertJobStatusEquals(t, job, status)
+	}
+}

@@ -156,33 +156,41 @@ var (
 )
 
 func init() {
-	// Set up the getAndMoveJobsToExecutingScript
-	getAndMoveJobsToExecutingBuff := bytes.NewBuffer([]byte{})
-	if err := getAndMoveJobsToExecutingTmpl.Execute(getAndMoveJobsToExecutingBuff, constantKeys); err != nil {
-		panic(err)
+	// Parse all the script templates and create redis.Script objects
+	scriptsToParse := []struct {
+		script   **redis.Script
+		tmpl     *template.Template
+		keyCount int
+	}{
+		{
+			script:   &getAndMoveJobsToExecutingScript,
+			tmpl:     getAndMoveJobsToExecutingTmpl,
+			keyCount: 1,
+		},
+		{
+			script:   &retryOrFailJobScript,
+			tmpl:     retryOrFailJobTmpl,
+			keyCount: 1,
+		},
+		{
+			script:   &setJobStatusScript,
+			tmpl:     setJobStatusTmpl,
+			keyCount: 2,
+		},
+		{
+			script:   &destroyJobScript,
+			tmpl:     destroyJobTmpl,
+			keyCount: 1,
+		},
 	}
-	getAndMoveJobsToExecutingScript = redis.NewScript(1, getAndMoveJobsToExecutingBuff.String())
 
-	// Set up the retryOrFailJobScript
-	retryOrFailJobBuff := bytes.NewBuffer([]byte{})
-	if err := retryOrFailJobTmpl.Execute(retryOrFailJobBuff, constantKeys); err != nil {
-		panic(err)
+	for _, s := range scriptsToParse {
+		buf := bytes.NewBuffer([]byte{})
+		if err := s.tmpl.Execute(buf, constantKeys); err != nil {
+			panic(err)
+		}
+		(*s.script) = redis.NewScript(s.keyCount, buf.String())
 	}
-	retryOrFailJobScript = redis.NewScript(1, retryOrFailJobBuff.String())
-
-	// Set up the setJobStatusScript
-	setJobStatusBuff := bytes.NewBuffer([]byte{})
-	if err := setJobStatusTmpl.Execute(setJobStatusBuff, constantKeys); err != nil {
-		panic(err)
-	}
-	setJobStatusScript = redis.NewScript(2, setJobStatusBuff.String())
-
-	// Set up the destroyJobScript
-	destroyJobBuff := bytes.NewBuffer([]byte{})
-	if err := destroyJobTmpl.Execute(destroyJobBuff, constantKeys); err != nil {
-		panic(err)
-	}
-	destroyJobScript = redis.NewScript(1, destroyJobBuff.String())
 }
 
 // getAndMoveJobsToExecuting is a small function wrapper around getAndMovesJobToExecutingScript.

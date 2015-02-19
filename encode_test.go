@@ -25,7 +25,7 @@ func TestConvertInt(t *testing.T) {
 	}
 	// Now the holder and the original should be equal. If they're not,
 	// there was a problem
-	assertEncodeDecodeEqual(t, v, holder)
+	expectEncodeDecodeEquals(t, v, holder)
 }
 
 func TestConvertString(t *testing.T) {
@@ -42,7 +42,7 @@ func TestConvertString(t *testing.T) {
 	}
 	// Now the holder and the original should be equal. If they're not,
 	// there was a problem
-	assertEncodeDecodeEqual(t, v, holder)
+	expectEncodeDecodeEquals(t, v, holder)
 }
 
 func TestConvertBool(t *testing.T) {
@@ -59,7 +59,7 @@ func TestConvertBool(t *testing.T) {
 	}
 	// Now the holder and the original should be equal. If they're not,
 	// there was a problem
-	assertEncodeDecodeEqual(t, v, holder)
+	expectEncodeDecodeEquals(t, v, holder)
 }
 
 func TestConvertStruct(t *testing.T) {
@@ -82,7 +82,7 @@ func TestConvertStruct(t *testing.T) {
 	}
 	// Now the holder and the original should be equal. If they're not,
 	// there was a problem
-	assertEncodeDecodeEqual(t, v, holder)
+	expectEncodeDecodeEquals(t, v, holder)
 }
 
 func TestConvertSlice(t *testing.T) {
@@ -99,10 +99,10 @@ func TestConvertSlice(t *testing.T) {
 	}
 	// Now the holder and the original should be equal. If they're not,
 	// there was a problem
-	assertEncodeDecodeEqual(t, v, holder)
+	expectEncodeDecodeEquals(t, v, holder)
 }
 
-func assertEncodeDecodeEqual(t *testing.T, expected, got interface{}) {
+func expectEncodeDecodeEquals(t *testing.T, expected, got interface{}) {
 	if !reflect.DeepEqual(expected, got) {
 		t.Errorf("Error encoding/decoding type %T. Expected %v but got %v.", expected, expected, got)
 	}

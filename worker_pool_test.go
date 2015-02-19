@@ -122,7 +122,7 @@ func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		assertJobStatusEquals(t, job, StatusExecuting)
+		expectJobStatusEquals(t, job, StatusExecuting)
 	}
 
 	// Signal that the jobs can now exit
@@ -208,10 +208,10 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 	// Check that the first 4 values of data were set to "ok"
 	// This would mean that the first 4 jobs (in order of priority)
 	// were successfully executed.
-	assertTestDataOk(t, data[:4])
+	expectTestDataOk(t, data[:4])
 
 	// Make sure all the other values of data are still blank
-	assertTestDataBlank(t, data[4:])
+	expectTestDataBlank(t, data[4:])
 
 	// Make sure the first four jobs we queued are marked as finished
 	for _, job := range queuedJobs[0:4] {
@@ -219,7 +219,7 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		assertJobStatusEquals(t, job, StatusFinished)
+		expectJobStatusEquals(t, job, StatusFinished)
 	}
 
 	// Make sure the next four jobs we queued are marked as queued
@@ -228,7 +228,7 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		assertJobStatusEquals(t, job, StatusQueued)
+		expectJobStatusEquals(t, job, StatusQueued)
 	}
 }
 
@@ -459,12 +459,12 @@ func TestJobTimestamps(t *testing.T) {
 	}
 
 	// Make sure that the timestamps are correct
-	assertTimeNotZero(t, job.Started())
-	assertTimeBetween(t, job.Started(), poolClosed, poolStarted)
-	assertTimeNotZero(t, job.Finished())
-	assertTimeBetween(t, job.Finished(), poolClosed, poolStarted)
-	assertDurationNotZero(t, job.Duration())
-	assertDurationBetween(t, job.Duration(), sleepDuration, poolClosed.Sub(poolStarted))
+	expectTimeNotZero(t, job.Started())
+	expectTimeBetween(t, job.Started(), poolClosed, poolStarted)
+	expectTimeNotZero(t, job.Finished())
+	expectTimeBetween(t, job.Finished(), poolClosed, poolStarted)
+	expectDurationNotZero(t, job.Duration())
+	expectDurationBetween(t, job.Duration(), sleepDuration, poolClosed.Sub(poolStarted))
 }
 
 // TestRecurringJob creates and executes a recurring job, then makes sure that the
@@ -531,7 +531,7 @@ OuterLoop:
 			}
 			// Make sure the job was started after the previous expected time
 			expectedStartAfter := time.Unix(0, expectedTimes[successCount-1])
-			assertTimeAfter(t, job.Started(), expectedStartAfter)
+			expectTimeAfter(t, job.Started(), expectedStartAfter)
 			// If we reached expectedSuccesses, we're done and the test passes!
 			if successCount == expectedSuccesses {
 				break OuterLoop
@@ -581,8 +581,8 @@ func TestJobFail(t *testing.T) {
 
 	// Make sure that the error field is correct and that the job was
 	// moved to the failed set
-	assertJobFieldEquals(t, job, "error", failMsg, stringConverter)
-	assertJobStatusEquals(t, job, StatusFailed)
+	expectJobFieldEquals(t, job, "error", failMsg, stringConverter)
+	expectJobStatusEquals(t, job, StatusFailed)
 }
 
 // TestRetryJob creates and executes a job that is guaranteed to fail, then tests that
@@ -650,10 +650,10 @@ OuterLoop:
 	}
 }
 
-// assertTestDataOk reports an error if any elements in data do not equal "ok". It is only used for
+// expectTestDataOk reports an error if any elements in data do not equal "ok". It is only used for
 // tests in this file. Many of the tests use a slice of strings as data and queue up jobs to set one
 // of the elements to "ok", so this makes checking them easier.
-func assertTestDataOk(t *testing.T, data []string) {
+func expectTestDataOk(t *testing.T, data []string) {
 	for i, datum := range data {
 		if datum != "ok" {
 			t.Errorf("Expected data[%d] to be \"ok\" but got: \"%s\"\ndata was: %v.", i, datum, data)
@@ -661,9 +661,9 @@ func assertTestDataOk(t *testing.T, data []string) {
 	}
 }
 
-// assertTestDataBlank is like assertTestDataOk except it does the opposite. It reports an error if any
+// expectTestDataBlank is like expectTestDataOk except it does the opposite. It reports an error if any
 // of the elements in data were not blank.
-func assertTestDataBlank(t *testing.T, data []string) {
+func expectTestDataBlank(t *testing.T, data []string) {
 	for i, datum := range data {
 		if datum != "" {
 			t.Errorf("Expected data[%d] to be \"\" but got: \"%s\"\ndata was: %v.", i, datum, data)
@@ -671,42 +671,42 @@ func assertTestDataBlank(t *testing.T, data []string) {
 	}
 }
 
-// assertTimeNotZero reports an error if x is equal to the zero time.
-func assertTimeNotZero(t *testing.T, x time.Time) {
+// expectTimeNotZero reports an error if x is equal to the zero time.
+func expectTimeNotZero(t *testing.T, x time.Time) {
 	if x.IsZero() {
 		t.Errorf("Expected time x to be non-zero but got zero.")
 	}
 }
 
-// assertTimeAfter reports an error if x is not after the given time.
-func assertTimeAfter(t *testing.T, x, after time.Time) {
+// expectTimeAfter reports an error if x is not after the given time.
+func expectTimeAfter(t *testing.T, x, after time.Time) {
 	if !x.After(after) {
 		t.Errorf("time x was incorrect. Expected it to be after %v but got %v.", after, x)
 	}
 }
 
-// assertTimeBefore reports an error if x is not before the given time.
-func assertTimeBefore(t *testing.T, x, before time.Time) {
+// expectTimeBefore reports an error if x is not before the given time.
+func expectTimeBefore(t *testing.T, x, before time.Time) {
 	if !x.Before(before) {
 		t.Errorf("time x was incorrect. Expected it to be before %v but got %v.", before, x)
 	}
 }
 
-// assertTimeBetween reports an error if x is not before and after the given times.
-func assertTimeBetween(t *testing.T, x, before, after time.Time) {
-	assertTimeBefore(t, x, before)
-	assertTimeAfter(t, x, after)
+// expectTimeBetween reports an error if x is not before and after the given times.
+func expectTimeBetween(t *testing.T, x, before, after time.Time) {
+	expectTimeBefore(t, x, before)
+	expectTimeAfter(t, x, after)
 }
 
-// assertDurationNotZero reports an error if d is equal to zero.
-func assertDurationNotZero(t *testing.T, d time.Duration) {
+// expectDurationNotZero reports an error if d is equal to zero.
+func expectDurationNotZero(t *testing.T, d time.Duration) {
 	if d.Nanoseconds() == 0 {
 		t.Errorf("Expected duration d to be non-zero but got zero.")
 	}
 }
 
-// assertDurationBetween reports an error if d is not more than min and less than max.
-func assertDurationBetween(t *testing.T, d, min, max time.Duration) {
+// expectDurationBetween reports an error if d is not more than min and less than max.
+func expectDurationBetween(t *testing.T, d, min, max time.Duration) {
 	if !(d > min) {
 		t.Errorf("duration d was incorrect. Expected it to be more than %v but got %v.", min, d)
 	}

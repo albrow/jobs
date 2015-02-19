@@ -67,7 +67,7 @@ func createAndSaveTestJob() (*Job, error) {
 	return j, nil
 }
 
-func assertJobFieldEquals(t *testing.T, job *Job, fieldName string, expected interface{}, converter replyConverter) {
+func expectJobFieldEquals(t *testing.T, job *Job, fieldName string, expected interface{}, converter replyConverter) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	got, err := conn.Do("HGET", job.key(), fieldName)
@@ -109,7 +109,7 @@ var (
 	}
 )
 
-func assertJobInStatusSet(t *testing.T, j *Job, status JobStatus) {
+func expectJobInStatusSet(t *testing.T, j *Job, status JobStatus) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", status.key(), j.priority, j.priority))
@@ -126,7 +126,7 @@ func assertJobInStatusSet(t *testing.T, j *Job, status JobStatus) {
 	t.Errorf("job:%s was not found in set %s", j.id, status.key())
 }
 
-func assertJobInTimeIndex(t *testing.T, j *Job) {
+func expectJobInTimeIndex(t *testing.T, j *Job) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", keys.jobsTimeIndex, j.time, j.time))
@@ -143,7 +143,7 @@ func assertJobInTimeIndex(t *testing.T, j *Job) {
 	t.Errorf("job:%s was not found in set %s", j.id, keys.jobsTimeIndex)
 }
 
-func assertJobNotInStatusSet(t *testing.T, j *Job, status JobStatus) {
+func expectJobNotInStatusSet(t *testing.T, j *Job, status JobStatus) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", status.key(), j.priority, j.priority))
@@ -158,7 +158,7 @@ func assertJobNotInStatusSet(t *testing.T, j *Job, status JobStatus) {
 	}
 }
 
-func assertJobNotInTimeIndex(t *testing.T, j *Job) {
+func expectJobNotInTimeIndex(t *testing.T, j *Job) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", keys.jobsTimeIndex, j.time, j.time))
@@ -173,40 +173,40 @@ func assertJobNotInTimeIndex(t *testing.T, j *Job) {
 	}
 }
 
-func assertJobStatusEquals(t *testing.T, job *Job, expected JobStatus) {
+func expectJobStatusEquals(t *testing.T, job *Job, expected JobStatus) {
 	if job.status != expected {
 		t.Errorf("Expected jobs:%s status to be %s but got %s", job.id, expected, job.status)
 	}
 	if expected == StatusDestroyed {
 		// If the status is destroyed, we don't expect the job to be in the database
 		// anymore.
-		assertJobDestroyed(t, job)
+		expectJobDestroyed(t, job)
 	} else {
 		// For every status other status, we expect the job to be in the database
 		for _, status := range possibleStatuses {
 			if status == expected {
 				// Make sure the job hash has the correct status
-				assertJobInStatusSet(t, job, status)
+				expectJobInStatusSet(t, job, status)
 				// Make sure the job is in the correct set
-				assertJobFieldEquals(t, job, "status", string(status), stringConverter)
+				expectJobFieldEquals(t, job, "status", string(status), stringConverter)
 			} else {
 				// Make sure the job is not in any other set
-				assertJobNotInStatusSet(t, job, status)
+				expectJobNotInStatusSet(t, job, status)
 			}
 		}
 	}
 }
 
-func assertJobDestroyed(t *testing.T, job *Job) {
+func expectJobDestroyed(t *testing.T, job *Job) {
 	// Make sure the main hash is gone
-	assertKeyNotExists(t, job.key())
-	assertJobNotInTimeIndex(t, job)
+	expectKeyNotExists(t, job.key())
+	expectJobNotInTimeIndex(t, job)
 	for _, status := range possibleStatuses {
-		assertJobNotInStatusSet(t, job, status)
+		expectJobNotInStatusSet(t, job, status)
 	}
 }
 
-func assertKeyExists(t *testing.T, key string) {
+func expectKeyExists(t *testing.T, key string) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	if exists, err := redis.Bool(conn.Do("EXISTS", key)); err != nil {
@@ -216,7 +216,7 @@ func assertKeyExists(t *testing.T, key string) {
 	}
 }
 
-func assertKeyNotExists(t *testing.T, key string) {
+func expectKeyNotExists(t *testing.T, key string) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	if exists, err := redis.Bool(conn.Do("EXISTS", key)); err != nil {

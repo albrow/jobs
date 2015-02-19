@@ -24,20 +24,20 @@ func TestJobSave(t *testing.T) {
 	}
 
 	// Make sure the main hash was saved correctly
-	assertJobFieldEquals(t, job, "data", job.data, nil)
-	assertJobFieldEquals(t, job, "type", job.typ.name, stringConverter)
-	assertJobFieldEquals(t, job, "time", job.time, int64Converter)
-	assertJobFieldEquals(t, job, "freq", job.freq, int64Converter)
-	assertJobFieldEquals(t, job, "priority", job.priority, intConverter)
-	assertJobFieldEquals(t, job, "started", job.started, int64Converter)
-	assertJobFieldEquals(t, job, "finished", job.finished, int64Converter)
-	assertJobFieldEquals(t, job, "retries", job.retries, uintConverter)
+	expectJobFieldEquals(t, job, "data", job.data, nil)
+	expectJobFieldEquals(t, job, "type", job.typ.name, stringConverter)
+	expectJobFieldEquals(t, job, "time", job.time, int64Converter)
+	expectJobFieldEquals(t, job, "freq", job.freq, int64Converter)
+	expectJobFieldEquals(t, job, "priority", job.priority, intConverter)
+	expectJobFieldEquals(t, job, "started", job.started, int64Converter)
+	expectJobFieldEquals(t, job, "finished", job.finished, int64Converter)
+	expectJobFieldEquals(t, job, "retries", job.retries, uintConverter)
 
 	// Make sure the job status was correct
-	assertJobStatusEquals(t, job, StatusSaved)
+	expectJobStatusEquals(t, job, StatusSaved)
 
 	// Make sure the job was indexed by its time correctly
-	assertJobInTimeIndex(t, job)
+	expectJobInTimeIndex(t, job)
 }
 
 func TestJobRefresh(t *testing.T) {
@@ -185,7 +185,7 @@ func TestJobSetError(t *testing.T) {
 	if err := job.setError(testErr); err != nil {
 		t.Errorf("Unexpected error in job.setError(): %s", err.Error())
 	}
-	assertJobFieldEquals(t, job, "error", testErr.Error(), stringConverter)
+	expectJobFieldEquals(t, job, "error", testErr.Error(), stringConverter)
 }
 
 // statePath represents a path through which a job can travel, where each step
@@ -227,7 +227,7 @@ func testJobStatePaths(t *testing.T, statePaths []statePath) {
 				t.Errorf("Unexpected error in step %v: %s", step, err)
 			}
 		}
-		assertJobStatusEquals(t, job, statePath.expected)
+		expectJobStatusEquals(t, job, statePath.expected)
 	}
 }
 

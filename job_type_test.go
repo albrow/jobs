@@ -77,11 +77,11 @@ func TestJobTypeSchedule(t *testing.T) {
 	if job.id == "" {
 		t.Errorf("After jobType.Schedule, job.id was empty.")
 	}
-	assertKeyExists(t, job.key())
-	assertJobFieldEquals(t, job, "priority", testJobPriority, intConverter)
-	assertJobFieldEquals(t, job, "time", encodedTime, int64Converter)
-	assertJobFieldEquals(t, job, "data", encodedData, bytesConverter)
-	assertJobStatusEquals(t, job, StatusQueued)
+	expectKeyExists(t, job.key())
+	expectJobFieldEquals(t, job, "priority", testJobPriority, intConverter)
+	expectJobFieldEquals(t, job, "time", encodedTime, int64Converter)
+	expectJobFieldEquals(t, job, "data", encodedData, bytesConverter)
+	expectJobStatusEquals(t, job, StatusQueued)
 	// Make sure we get an error if the data is not the correct type
 	if _, err := jobType.Schedule(0, time.Now(), 0); err == nil {
 		t.Errorf("Expected error when calling jobType.Schedule with incorrect data type but got none")

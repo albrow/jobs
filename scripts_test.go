@@ -124,10 +124,10 @@ func TestRetryOrFailJobScript(t *testing.T) {
 		}
 		if tc.expectedReturn == false {
 			// We expect the job to be in the failed set because it had no retries left
-			assertJobStatusEquals(t, tc.job, StatusFailed)
+			expectJobStatusEquals(t, tc.job, StatusFailed)
 		} else {
 			// We expect the job to be in the queued set because it was queued for retry
-			assertJobStatusEquals(t, tc.job, StatusQueued)
+			expectJobStatusEquals(t, tc.job, StatusQueued)
 		}
 	}
 }
@@ -154,7 +154,7 @@ func TestSetJobStatusScript(t *testing.T) {
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		assertJobStatusEquals(t, job, status)
+		expectJobStatusEquals(t, job, status)
 	}
 }
 
@@ -176,5 +176,5 @@ func TestDestroyJobScript(t *testing.T) {
 
 	// Make sure the job was destroyed
 	job.status = StatusDestroyed
-	assertJobStatusEquals(t, job, StatusDestroyed)
+	expectJobStatusEquals(t, job, StatusDestroyed)
 }

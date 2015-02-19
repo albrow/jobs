@@ -23,6 +23,7 @@ type Job struct {
 	retries  uint
 	started  int64
 	finished int64
+	poolId   string
 }
 
 // JobStatus represents the different statuses a job can have.
@@ -268,6 +269,7 @@ func (j *Job) mainHashArgs() []interface{} {
 		"status", j.status,
 		"started", j.started,
 		"finished", j.finished,
+		"poolId", j.poolId,
 	}
 	if j.err != nil {
 		hashArgs = append(hashArgs, "error", j.err.Error())
@@ -338,6 +340,10 @@ func scanJob(reply interface{}, job *Job) error {
 			}
 		case "finished":
 			if err := scanInt64(fieldValue, &(job.finished)); err != nil {
+				return err
+			}
+		case "poolId":
+			if err := scanString(fieldValue, &(job.poolId)); err != nil {
 				return err
 			}
 		}

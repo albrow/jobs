@@ -105,6 +105,9 @@ func (w *worker) doJob(job *Job) {
 // workerPoolType is the type of Pool. End users should not instantiate
 // their own pools, so this type is private.
 type workerPoolType struct {
+	// id is a unique identifier for each worker, which is generated whenver
+	// Start() is called
+	id string
 	// workers is a slice of all workers
 	workers []*worker
 	// jobs is a channel through which jobs are delegated to workers
@@ -115,14 +118,13 @@ type workerPoolType struct {
 	// exit is used to signal the pool to stop running the query loop
 	// and close the jobs channel
 	exit chan bool
-	// sync.Mutex is used to lock when modifying attributes of the worker pool
-	// e.g. in Start()
 }
 
 // Start starts the worker pool. This means the pool will initialize workers,
 // continuously query the database for queued jobs, and delegate those jobs
 // to the workers.
 func (wp *workerPoolType) Start() {
+	wp.id = generateRandomId()
 	wp.workers = make([]*worker, Config.Pool.NumWorkers)
 	wp.jobs = make(chan *Job, Config.Pool.BatchSize)
 	wp.wg = &sync.WaitGroup{}

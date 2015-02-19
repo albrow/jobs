@@ -23,6 +23,7 @@ func TestJobSave(t *testing.T) {
 	job.finished = 5
 	job.freq = 10
 	job.retries = 3
+	job.poolId = "testPool"
 	if err := job.save(); err != nil {
 		t.Errorf("Unexpected error saving job: %s", err.Error())
 	}
@@ -36,6 +37,7 @@ func TestJobSave(t *testing.T) {
 	expectJobFieldEquals(t, job, "started", job.started, int64Converter)
 	expectJobFieldEquals(t, job, "finished", job.finished, int64Converter)
 	expectJobFieldEquals(t, job, "retries", job.retries, uintConverter)
+	expectJobFieldEquals(t, job, "poolId", job.poolId, stringConverter)
 
 	// Make sure the job status was correct
 	expectJobStatusEquals(t, job, StatusSaved)

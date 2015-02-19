@@ -66,6 +66,7 @@ func TestPopNextJobsScript(t *testing.T) {
 	if !reflect.DeepEqual(expectedQueued, gotQueued) {
 		t.Errorf("Ids in the queued set were incorrect.\n\tExpected: %v\n\tBut got:  %v", expectedQueued, gotQueued)
 	}
+	expectKeyNotExists(t, keys.jobsTemp)
 }
 
 func TestRetryOrFailJobScript(t *testing.T) {

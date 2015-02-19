@@ -56,13 +56,13 @@ redis.call('ZINTERSTORE', '{{.jobsTempSet}}', 2, '{{.queuedSet}}', '{{.jobsTempS
 redis.call('ZREMRANGEBYRANK', '{{.jobsTempSet}}', 0, -n - 1)
 -- Get all job ids from the temp set
 local jobIds = redis.call('ZREVRANGE', '{{.jobsTempSet}}', 0, -1)
+local allJobs = {}
 if #jobIds > 0 then
 	-- Add job ids to the executing set
 	redis.call('ZUNIONSTORE', '{{.executingSet}}', 2, '{{.executingSet}}', '{{.jobsTempSet}}')
 	-- Remove job ids from the queued set
 	redis.call('ZREMRANGEBYRANK', '{{.queuedSet}}', -(#jobIds), -1)
 	-- Now we are ready to construct our response.
-	local allJobs = {}
 	for i, jobId in ipairs(jobIds) do
 		local jobKey = 'jobs:' .. jobId
 		-- Set the job status to executing
@@ -75,9 +75,8 @@ if #jobIds > 0 then
 		-- Add the field values to allJobs
 		allJobs[#allJobs+1] = jobFields
 	end
-	-- Return all the fields for all the jobs
-	return allJobs
-else
-	-- There were no jobs in the final resulting set. Return an empty table.
-	return {}
 end
+-- Delete the temporary set
+redis.call('DEL', '{{.jobsTempSet}}')
+-- Return all the fields for all the jobs
+return allJobs

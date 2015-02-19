@@ -5,8 +5,8 @@
 -- 	2) Removes the job from the time index
 -- 	3) Removes the main hash for the job
 
--- Assign keys to variables for easy reference
-local jobId = KEYS[1]
+-- Assign args to variables for easy reference
+local jobId = ARGV[1]
 local jobKey = 'jobs:' .. jobId
 -- Remove the job from the status set
 local jobStatus = redis.call('HGET', jobKey, 'status')

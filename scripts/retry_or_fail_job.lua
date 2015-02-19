@@ -11,8 +11,8 @@
 -- 	3) Removes the job from the executing set
 -- 	2) Returns false
 
--- Assign keys to variables for easy reference
-local jobId = KEYS[1]
+-- Assign args to variables for easy reference
+local jobId = ARGV[1]
 local jobKey = 'jobs:' .. jobId
 -- Check how many retries remain
 local retries = redis.call('HGET', jobKey, 'retries')

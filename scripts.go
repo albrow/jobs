@@ -56,17 +56,17 @@ func init() {
 		{
 			script:   &retryOrFailJobScript,
 			filename: "retry_or_fail_job.lua",
-			keyCount: 1,
+			keyCount: 0,
 		},
 		{
 			script:   &setJobStatusScript,
 			filename: "set_job_status.lua",
-			keyCount: 2,
+			keyCount: 0,
 		},
 		{
 			script:   &destroyJobScript,
 			filename: "destroy_job.lua",
-			keyCount: 1,
+			keyCount: 0,
 		},
 	}
 

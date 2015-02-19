@@ -34,7 +34,7 @@
 -- 	]
 -- ]
 
--- Assign keys to variables for easy reference
+-- Assign args to variables for easy reference
 local n = ARGV[1]
 local currentTime = ARGV[2]
 -- Copy the time index set to a new temporary set

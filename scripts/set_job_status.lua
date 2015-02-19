@@ -6,9 +6,9 @@
 -- 	2) Removes the job from the old status set (which it gets with an HGET call)
 -- 	3) Sets the 'status' field in the main hash for the job
 	
--- Assign keys to variables for easy reference
-local jobId = KEYS[1]
-local newStatus = KEYS[2]
+-- Assign args to variables for easy reference
+local jobId = ARGV[1]
+local newStatus = ARGV[2]
 local jobKey = 'jobs:' .. jobId
 local newStatusSet = 'jobs:' .. newStatus
 -- Add the job to the new status set

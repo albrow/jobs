@@ -4,17 +4,20 @@ import (
 	"github.com/garyburd/redigo/redis"
 	"reflect"
 	"testing"
+	"time"
 )
 
-func TestGetAndMoveJobsToExecutingScript(t *testing.T) {
+func TestPopNextJobsScript(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
+
+	// Set up some time parameters
+	pastTime := time.Now().Add(-10 * time.Millisecond).UTC().UnixNano()
 
 	// Set up the database
 	tx0 := newTransaction()
 	// One set will mimic the ready and sorted jobs
-	jobsReadyAndSortedKey := jobsReadyAndSorted.generateKey()
-	tx0.command("ZADD", redis.Args{jobsReadyAndSortedKey, 3, "three", 4, "four"}, nil)
+	tx0.command("ZADD", redis.Args{keys.jobsTimeIndex, pastTime, "three", pastTime, "four"}, nil)
 	// One set will mimic the queued set
 	tx0.command("ZADD", redis.Args{StatusQueued.key(), 1, "one", 2, "two", 3, "three", 4, "four"}, nil)
 	// One set will mimic the executing set
@@ -25,10 +28,15 @@ func TestGetAndMoveJobsToExecutingScript(t *testing.T) {
 
 	// Start a new transaction and execute the script
 	tx1 := newTransaction()
-	gotIds := []string{}
-	tx1.getAndMoveJobsToExecuting(jobsReadyAndSortedKey, newScanStringsHandler(&gotIds))
+	gotJobs := []*Job{}
+	tx1.popNextJobs(2, newScanJobsHandler(&gotJobs))
 	if err := tx1.exec(); err != nil {
 		t.Errorf("Unexpected error executing transaction: %s", err.Error())
+	}
+
+	gotIds := []string{}
+	for _, job := range gotJobs {
+		gotIds = append(gotIds, job.id)
 	}
 
 	// Check the results

@@ -189,54 +189,15 @@ func (wp *workerPoolType) sendNextJobs(n int) error {
 }
 
 func getNextJobs(n int) ([]*Job, error) {
-	// Start the first transaction, which gets the ids of jobs which are ready to execute
-	// based on their time parameter whether or not they are in the queued set.
-	t0 := newTransaction()
-
-	// Copy the time index set to a new set with a temporary name
-	jobsReadyByTimeKey := jobsReadyByTime.generateKey()
-	t0.command("ZUNIONSTORE", redis.Args{jobsReadyByTimeKey, 1, keys.jobsTimeIndex}, nil)
-
-	// Trim the new temporary set we created to leave only the jobs which have a time parameter in the past
-	currentTime := time.Now().UTC().UnixNano()
-	t0.command("ZREMRANGEBYSCORE", redis.Args{jobsReadyByTimeKey, currentTime, "+inf"}, nil)
-
-	// Intersect the jobs which are ready based on their time with those in the
-	// queued set. Store the results in a temporary set.
-	jobsReadyAndSortedKey := jobsReadyAndSorted.generateKey()
-	t0.command("ZINTERSTORE", redis.Args{jobsReadyAndSortedKey, 2, StatusQueued.key(), jobsReadyByTimeKey, "WEIGHTS", 1, 0}, nil)
-
-	// Trim the jobs:readyAndSorted set, so it contains only the first n jobs ordered by
-	// priority
-	t0.command("ZREMRANGEBYRANK", redis.Args{jobsReadyAndSortedKey, 0, -n - 1}, nil)
-
-	// Get all the jobs from the jobs:readyAndSorted set, which contains the next n jobs that
-	// are ready based on their time parameter sorted by priority.
-	jobIds := []string{}
-	t0.getAndMoveJobsToExecuting(jobsReadyAndSortedKey, newScanStringsHandler(&jobIds))
-
-	// Delete the temporary sets we created for intersecting
-	t0.command("DEL", redis.Args{jobsReadyByTimeKey, jobsReadyAndSortedKey}, nil)
-
-	// Execute the transaction
-	if err := t0.exec(); err != nil {
-		return nil, err
-	}
-
-	// Start the second transaction, which gets all the other data for the job ids we have
-	t1 := newTransaction()
+	// Start a new transaction
+	t := newTransaction()
+	// Invoke a script to get all the jobs which are ready to execute based on their
+	// time parameter and whether or not they are in the queued set.
 	jobs := []*Job{}
-	for _, jobId := range jobIds {
-		// Add a command to set the status to executing
-		job := &Job{id: jobId}
-		t1.command("HSET", redis.Args{job.key(), "status", string(StatusExecuting)}, nil)
-		// Add a command to get the job fields from its hash in the database
-		t1.scanJobById(job.id, job)
-		jobs = append(jobs, job)
-	}
+	t.popNextJobs(n, newScanJobsHandler(&jobs))
 
 	// Execute the transaction
-	if err := t1.exec(); err != nil {
+	if err := t.exec(); err != nil {
 		return nil, err
 	}
 	return jobs, nil

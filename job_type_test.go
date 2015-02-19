@@ -6,6 +6,8 @@ import (
 )
 
 func TestRegisterJobType(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
 	// Reset job types
 	jobTypes = map[string]*JobType{}
 	// Make sure we can register a job type without error

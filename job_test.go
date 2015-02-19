@@ -77,6 +77,9 @@ func TestJobRefresh(t *testing.T) {
 }
 
 func TestJobEnqueue(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
 	// Run through a set of possible state paths and make sure the result is
 	// always what we expect
 	statePaths := []statePath{
@@ -101,6 +104,9 @@ func TestJobEnqueue(t *testing.T) {
 }
 
 func TestJobCancel(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
 	// Run through a set of possible state paths and make sure the result is
 	// always what we expect
 	statePaths := []statePath{
@@ -125,6 +131,9 @@ func TestJobCancel(t *testing.T) {
 }
 
 func TestJobDestroy(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
 	// Run through a set of possible state paths and make sure the result is
 	// always what we expect
 	statePaths := []statePath{
@@ -165,6 +174,9 @@ func TestJobDestroy(t *testing.T) {
 }
 
 func TestJobSetError(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
 	job, err := createAndSaveTestJob()
 	if err != nil {
 		t.Errorf("Unexpected error in createAndSaveTestJob(): %s", err.Error())

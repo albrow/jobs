@@ -268,6 +268,10 @@ func scanJob(reply interface{}, job *Job) error {
 		}
 		fieldValue := fields[i+1]
 		switch fieldName {
+		case "id":
+			if err := scanString(fieldValue, &(job.id)); err != nil {
+				return err
+			}
 		case "data":
 			if err := scanBytes(fieldValue, &(job.data)); err != nil {
 				return err

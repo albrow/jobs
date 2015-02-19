@@ -124,6 +124,25 @@ func newScanJobHandler(job *Job) replyHandler {
 	}
 }
 
+// newScanJobsHandler returns a replyHandler which, when run, will scan the values
+// of reply into jobs.
+func newScanJobsHandler(jobs *[]*Job) replyHandler {
+	return func(reply interface{}) error {
+		values, err := redis.Values(reply, nil)
+		if err != nil {
+			return nil
+		}
+		for _, fields := range values {
+			job := &Job{}
+			if err := scanJob(fields, job); err != nil {
+				return err
+			}
+			(*jobs) = append((*jobs), job)
+		}
+		return nil
+	}
+}
+
 // debug set simply prints out the value of the given set
 func (t *transaction) debugSet(setName string) {
 	t.command("ZRANGE", redis.Args{setName, 0, -1, "WITHSCORES"}, func(reply interface{}) error {

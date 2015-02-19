@@ -203,12 +203,8 @@ func (j *Job) Destroy() error {
 	}
 	// Start a new transaction
 	t := newTransaction()
-	// Remove the job hash
-	t.command("DEL", redis.Args{j.key()}, nil)
-	// Remove the job from the set it is currently in
-	t.command("ZREM", redis.Args{j.status.key(), j.id}, nil)
-	// Remove the job from the time index
-	t.command("ZREM", redis.Args{keys.jobsTimeIndex, j.id}, nil)
+	// Call the script to destroy the job
+	t.destroyJob(j)
 	// Execute the transaction
 	if err := t.exec(); err != nil {
 		return err

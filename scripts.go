@@ -22,6 +22,7 @@ var (
 		"failedSet":       StatusFailed.key(),
 		"cancelledSet":    StatusCancelled.key(),
 		"destroyedSet":    StatusDestroyed.key(),
+		"timeIndexSet":    keys.jobsTimeIndex,
 	}
 )
 
@@ -99,7 +100,7 @@ var retryOrFailJobTmpl = template.Must(template.New("retryOrFailJobScript").Pars
 // 1) Adds the job to the new status set
 // 2) Removes the job from the old status set (which it gets with an HGET call)
 // 3) Sets the 'status' field in the main hash for the job
-var setJobStatusTmpl = template.Must(template.New("retryOrFailJobScript").Parse(`
+var setJobStatusTmpl = template.Must(template.New("setJobStatusScript").Parse(`
 	-- Assign keys to variables for easy reference
 	local jobId = KEYS[1]
 	local newStatus = KEYS[2]
@@ -118,10 +119,33 @@ var setJobStatusTmpl = template.Must(template.New("retryOrFailJobScript").Parse(
 	redis.call('HSET', jobKey, 'status', newStatus)
 `))
 
+// destroyJobTmpl represents a lua script that takes the following arguments:
+// 1) The id of the job to destroy
+// It then removes all traces of the job in the database by doing the following:
+// 1) Removes the job from the status set (which it determines with an HGET call)
+// 2) Removes the job from the time index
+// 3) Removes the main hash for the job
+var destroyJobTmpl = template.Must(template.New("destroyJobScript").Parse(`
+	-- Assign keys to variables for easy reference
+	local jobId = KEYS[1]
+	local jobKey = 'jobs:' .. jobId
+	-- Remove the job from the status set
+	local jobStatus = redis.call('HGET', jobKey, 'status')
+	if jobStatus ~= '' then
+		local statusSet = 'jobs:' .. jobStatus
+		redis.call('ZREM', statusSet, jobId)
+	end
+	-- Remove the job from the time index
+	redis.call('ZREM', '{{.timeIndexSet}}', jobId)
+	-- Remove the main hash for the job
+	redis.call('DEL', jobKey)
+`))
+
 var (
 	getAndMoveJobsToExecutingScript *redis.Script
 	retryOrFailJobScript            *redis.Script
 	setJobStatusScript              *redis.Script
+	destroyJobScript                *redis.Script
 )
 
 func init() {
@@ -145,6 +169,13 @@ func init() {
 		panic(err)
 	}
 	setJobStatusScript = redis.NewScript(2, setJobStatusBuff.String())
+
+	// Set up the destroyJobScript
+	destroyJobBuff := bytes.NewBuffer([]byte{})
+	if err := destroyJobTmpl.Execute(destroyJobBuff, constantKeys); err != nil {
+		panic(err)
+	}
+	destroyJobScript = redis.NewScript(1, destroyJobBuff.String())
 }
 
 // getAndMoveJobsToExecuting is a small function wrapper around getAndMovesJobToExecutingScript.
@@ -163,4 +194,10 @@ func (t *transaction) retryOrFailJob(job *Job, handler replyHandler) {
 // It offers some type safety and helps make sure the arguments you pass through to the are correct.
 func (t *transaction) setJobStatus(job *Job, status JobStatus) {
 	t.script(setJobStatusScript, redis.Args{job.id, string(status)}, nil)
+}
+
+// destroyJob is a small function wrapper around destroyJobScript.
+// It offers some type safety and helps make sure the arguments you pass through to the are correct.
+func (t *transaction) destroyJob(job *Job) {
+	t.script(destroyJobScript, redis.Args{job.id}, nil)
 }

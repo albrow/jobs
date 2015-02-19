@@ -126,7 +126,7 @@ func TestRetryOrFailJobScript(t *testing.T) {
 
 func TestSetJobStatusScript(t *testing.T) {
 	testingSetUp()
-	// defer testingTeardown()
+	defer testingTeardown()
 
 	job, err := createAndSaveTestJob()
 	if err != nil {
@@ -148,4 +148,25 @@ func TestSetJobStatusScript(t *testing.T) {
 		}
 		assertJobStatusEquals(t, job, status)
 	}
+}
+
+func TestDestroyJobScript(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	job, err := createAndSaveTestJob()
+	if err != nil {
+		t.Errorf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
+	}
+
+	// Execute the script to destroy the job
+	tx := newTransaction()
+	tx.destroyJob(job)
+	if err := tx.exec(); err != nil {
+		t.Error("Unexpected err in tx.exec(): %s", err.Error())
+	}
+
+	// Make sure the job was destroyed
+	job.status = StatusDestroyed
+	assertJobStatusEquals(t, job, StatusDestroyed)
 }

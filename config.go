@@ -5,11 +5,13 @@ import (
 	"time"
 )
 
+// configType holds different config variables
 type configType struct {
 	Pool poolConfig
 	Db   databaseConfig
 }
 
+// databaseConfig holds config variables specific to the database
 type databaseConfig struct {
 	// Address is the address of the redis database to connect to. Default is
 	// "localhost:6379".
@@ -22,6 +24,7 @@ type databaseConfig struct {
 	Database int
 }
 
+// poolConfig holds config variables specific to the worker pool
 type poolConfig struct {
 	// NumWorkers is the number of workers to run
 	// Each worker will run inside its own goroutine

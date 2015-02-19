@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Job represents a discrete piece of work to be done by a worker.
 type Job struct {
 	id       string
 	data     []byte
@@ -20,15 +21,25 @@ type Job struct {
 	finished int64
 }
 
+// JobStatus represents the different statuses a job can have.
 type JobStatus string
 
 const (
-	StatusSaved     JobStatus = "saved"
-	StatusQueued    JobStatus = "queued"
+	// StatusSaved is the status of any job that has been saved into the database but not yet queued
+	StatusSaved JobStatus = "saved"
+	// StatusQueued is the status of any job that has been queued for execution but not yet selected
+	StatusQueued JobStatus = "queued"
+	// StatusExecuting is the status of any job that has been selected for execution and is being delegated
+	// to some worker and any job that is currently being executed by some worker.
 	StatusExecuting JobStatus = "executing"
-	StatusFinished  JobStatus = "finished"
-	StatusFailed    JobStatus = "failed"
+	// StatusFinished is the status of any job that has been successfully executed.
+	StatusFinished JobStatus = "finished"
+	// StatusFailed is the status of any job that failed to execute and for which there are no remaining retries.
+	StatusFailed JobStatus = "failed"
+	// StatusCancelled is the status of any job that was manually cancelled.
 	StatusCancelled JobStatus = "cancelled"
+	// StatusDestroyed is the status of any job that has been destroyed, i.e. completely removed
+	// from the database.
 	StatusDestroyed JobStatus = "destroyed"
 )
 
@@ -46,6 +57,7 @@ func (status JobStatus) Count() (int, error) {
 	return redis.Int(conn.Do("ZCARD", status.key()))
 }
 
+// possibleStatuses is simply an array of all the possible job statuses.
 var possibleStatuses = []JobStatus{
 	StatusSaved,
 	StatusQueued,
@@ -56,14 +68,19 @@ var possibleStatuses = []JobStatus{
 	StatusDestroyed,
 }
 
+// Id returns the unique identifier used for the job. If the job has not yet
+// been saved to the database, it may return an empty string.
 func (j *Job) Id() string {
 	return j.id
 }
 
+// Status returns the status of the job.
 func (j *Job) Status() JobStatus {
 	return j.status
 }
 
+// Error returns the last error that arose during execution of the job. It is
+// only non-nil if the job has failed at some point.
 func (j *Job) Error() error {
 	return j.err
 }
@@ -117,8 +134,9 @@ func (j *Job) nextTime() int64 {
 	return j.time + j.freq
 }
 
-// save writes the job to the database but does not enqueue it. If you want to add it
-// to the queue, use the Enqueue method after save.
+// save writes the job to the database and adds it to the appropriate indexes and status
+// sets, but does not enqueue it. If you want to add it to the queue, use the Enqueue method
+// after save.
 func (j *Job) save() error {
 	t := newTransaction()
 	t.saveJob(j)
@@ -130,8 +148,8 @@ func (j *Job) save() error {
 
 // saveJob adds commands to the transaction to set all the fields for the main hash for the job,
 // add the job to the time index, move the job to the appropriate status set. It will
-// also mutate the job by 1) generating an id if the id is empty and 2) setting the status to StatusSaved
-// if the status is empty.
+// also mutate the job by 1) generating an id if the id is empty and 2) setting the status to
+// StatusSaved if the status is empty.
 func (t *transaction) saveJob(job *Job) {
 	// Generate id if needed
 	if job.id == "" {
@@ -149,6 +167,8 @@ func (t *transaction) saveJob(job *Job) {
 	t.addJobToTimeIndex(job)
 }
 
+// addJobToTimeIndex adds commands to the transaction which will, when executed,
+// add the job id to the time index with a score equal to the job's time field.
 func (t *transaction) addJobToTimeIndex(job *Job) {
 	t.command("ZADD", redis.Args{keys.jobsTimeIndex, job.time, job.id}, nil)
 }
@@ -321,6 +341,7 @@ func scanJob(reply interface{}, job *Job) error {
 	return nil
 }
 
+// scanInt converts a reply from redis into an int and scans the value into v.
 func scanInt(reply interface{}, v *int) error {
 	if v == nil {
 		return fmt.Errorf("zazu: In scanInt: argument v was nil")
@@ -333,6 +354,7 @@ func scanInt(reply interface{}, v *int) error {
 	return nil
 }
 
+// scanUint converts a reply from redis into a uint and scans the value into v.
 func scanUint(reply interface{}, v *uint) error {
 	if v == nil {
 		return fmt.Errorf("zazu: In scanUint: argument v was nil")
@@ -345,6 +367,7 @@ func scanUint(reply interface{}, v *uint) error {
 	return nil
 }
 
+// scanInt64 converts a reply from redis into an int64 and scans the value into v.
 func scanInt64(reply interface{}, v *int64) error {
 	if v == nil {
 		return fmt.Errorf("zazu: In scanInt64: argument v was nil")
@@ -357,6 +380,7 @@ func scanInt64(reply interface{}, v *int64) error {
 	return nil
 }
 
+// scanString converts a reply from redis into a string and scans the value into v.
 func scanString(reply interface{}, v *string) error {
 	if v == nil {
 		return fmt.Errorf("zazu: In String: argument v was nil")
@@ -369,6 +393,7 @@ func scanString(reply interface{}, v *string) error {
 	return nil
 }
 
+// scanBytes converts a reply from redis into a slice of bytes and scans the value into v.
 func scanBytes(reply interface{}, v *[]byte) error {
 	if v == nil {
 		return fmt.Errorf("zazu: In scanBytes: argument v was nil")

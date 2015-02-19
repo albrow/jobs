@@ -9,11 +9,16 @@ import (
 	"time"
 )
 
+// setUpOnce enforces that certain pieces of the set up process only occur once,
+// even after successive calls to testingSetUp.
 var setUpOnce = sync.Once{}
 
+// testingSetUp should be called at the beginning of any test that touches the database
+// or registers new job types.
 func testingSetUp() {
 	setUpOnce.Do(func() {
 		// Use database 14 and a unix socket connection for testing
+		// TODO: allow this to be configured via command-line flags
 		Config.Db.Database = 14
 		Config.Db.Address = "/tmp/redis.sock"
 		Config.Db.Network = "unix"
@@ -22,11 +27,14 @@ func testingSetUp() {
 	jobTypes = map[string]*JobType{}
 }
 
+// testingSetUp should be called at the end of any test that touches the database
+// or registers new job types, usually via defer.
 func testingTeardown() {
 	// Flush the database
 	flushdb()
 }
 
+// flushdb removes all keys from the current database.
 func flushdb() {
 	conn := redisPool.Get()
 	if _, err := conn.Do("FLUSHDB"); err != nil {
@@ -34,6 +42,7 @@ func flushdb() {
 	}
 }
 
+// createTestJob creates and returns a job that can be used for testing.
 func createTestJob() (*Job, error) {
 	// Register the "testJobType"
 	jobTypeName := "testJobType"
@@ -56,6 +65,8 @@ func createTestJob() (*Job, error) {
 	return j, nil
 }
 
+// createAndSaveTestJob creates, saves, and returns a job which can be used
+// for testing.
 func createAndSaveTestJob() (*Job, error) {
 	j, err := createTestJob()
 	if err != nil {
@@ -67,6 +78,8 @@ func createAndSaveTestJob() (*Job, error) {
 	return j, nil
 }
 
+// expectJobFieldEquals sets an error via t.Errorf if the the field identified by fieldName does
+// not equal expected according to the database.
 func expectJobFieldEquals(t *testing.T, job *Job, fieldName string, expected interface{}, converter replyConverter) {
 	conn := redisPool.Get()
 	defer conn.Close()
@@ -85,6 +98,8 @@ func expectJobFieldEquals(t *testing.T, job *Job, fieldName string, expected int
 	}
 }
 
+// replyConverter represents a function which is capable of converting a redis
+// reply to some other type.
 type replyConverter func(interface{}) (interface{}, error)
 
 var (
@@ -109,6 +124,8 @@ var (
 	}
 )
 
+// expectJobInStatusSet sets an error via t.Errorf if job is not in the status set
+// corresponding to status.
 func expectJobInStatusSet(t *testing.T, j *Job, status JobStatus) {
 	conn := redisPool.Get()
 	defer conn.Close()
@@ -126,6 +143,8 @@ func expectJobInStatusSet(t *testing.T, j *Job, status JobStatus) {
 	t.Errorf("job:%s was not found in set %s", j.id, status.key())
 }
 
+// expectJobInTimeIndex sets an error via t.Errorf if job is not in the time index
+// set.
 func expectJobInTimeIndex(t *testing.T, j *Job) {
 	conn := redisPool.Get()
 	defer conn.Close()
@@ -143,6 +162,8 @@ func expectJobInTimeIndex(t *testing.T, j *Job) {
 	t.Errorf("job:%s was not found in set %s", j.id, keys.jobsTimeIndex)
 }
 
+// expectJobNotInStatusSet sets an error via t.Errorf if job is in the status set
+// corresponding to status.
 func expectJobNotInStatusSet(t *testing.T, j *Job, status JobStatus) {
 	conn := redisPool.Get()
 	defer conn.Close()
@@ -158,6 +179,8 @@ func expectJobNotInStatusSet(t *testing.T, j *Job, status JobStatus) {
 	}
 }
 
+// expectJobNotInTimeIndex sets an error via t.Errorf if job is in the time index
+// set.
 func expectJobNotInTimeIndex(t *testing.T, j *Job) {
 	conn := redisPool.Get()
 	defer conn.Close()
@@ -173,6 +196,10 @@ func expectJobNotInTimeIndex(t *testing.T, j *Job) {
 	}
 }
 
+// expectJobStatusEquals sets an error via t.Errorf if job.status does not equal expected,
+// if the status field for the job in the database does not equal expected, if the job is
+// not in the status set corresponding to expected, or if the job is in some other status
+// set.
 func expectJobStatusEquals(t *testing.T, job *Job, expected JobStatus) {
 	if job.status != expected {
 		t.Errorf("Expected jobs:%s status to be %s but got %s", job.id, expected, job.status)
@@ -197,6 +224,7 @@ func expectJobStatusEquals(t *testing.T, job *Job, expected JobStatus) {
 	}
 }
 
+// expectJobDestroyed sets an error via t.Errorf if job has not been destroyed.
 func expectJobDestroyed(t *testing.T, job *Job) {
 	// Make sure the main hash is gone
 	expectKeyNotExists(t, job.key())
@@ -206,6 +234,7 @@ func expectJobDestroyed(t *testing.T, job *Job) {
 	}
 }
 
+// expectKeyExists sets an error via t.Errorf if key does not exist in the database.
 func expectKeyExists(t *testing.T, key string) {
 	conn := redisPool.Get()
 	defer conn.Close()
@@ -216,6 +245,7 @@ func expectKeyExists(t *testing.T, key string) {
 	}
 }
 
+// expectKeyNotExists sets an error via t.Errorf if key does exist in the database.
 func expectKeyNotExists(t *testing.T, key string) {
 	conn := redisPool.Get()
 	defer conn.Close()

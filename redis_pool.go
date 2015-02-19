@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// redisPool is a thread-safe pool of redis connections. Use the Get method
+// to get a new connection.
 var redisPool = &redis.Pool{
 	MaxIdle:     10,
 	MaxActive:   0,

@@ -7,6 +7,8 @@ import (
 	"reflect"
 )
 
+// decode decodes a slice of bytes and scans the value into dest using the gob package.
+// All types are supported except recursive data structures and functions.
 func decode(reply []byte, dest interface{}) error {
 	// Check the type of dest and make sure it is a pointer to something,
 	// otherwise we can't set its value in any meaningful way.
@@ -25,6 +27,8 @@ func decode(reply []byte, dest interface{}) error {
 	return nil
 }
 
+// encode encodes data into a slice of bytes using the gob package.
+// All types are supported except recursive data structures and functions.
 func encode(data interface{}) ([]byte, error) {
 	if data == nil {
 		return nil, nil

@@ -231,7 +231,7 @@ func testJobStatePaths(t *testing.T, statePaths []statePath) {
 	}
 }
 
-func TestJobScanReply(t *testing.T) {
+func TestScanJob(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 	job, err := createAndSaveTestJob()

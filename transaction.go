@@ -5,11 +5,16 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
+// transaction is an abstraction layer around a redis transaction.
+// transactions feature delayed execution, so nothing touches the database
+// until exec is called.
 type transaction struct {
 	conn    redis.Conn
 	actions []*action
 }
 
+// action is a single step in a transaction and must be either a command
+// or a script with optional arguments.
 type action struct {
 	kind    actionKind
 	name    string
@@ -18,6 +23,7 @@ type action struct {
 	handler replyHandler
 }
 
+// actionKind is either a command or a script
 type actionKind int
 
 const (
@@ -25,8 +31,11 @@ const (
 	actionScript
 )
 
+// replyHandler is a function which does something with the reply from a redis
+// command or script.
 type replyHandler func(interface{}) error
 
+// newTransaction instantiates and returns a new transaction.
 func newTransaction() *transaction {
 	t := &transaction{
 		conn: redisPool.Get(),
@@ -34,6 +43,9 @@ func newTransaction() *transaction {
 	return t
 }
 
+// command adds a command action to the transaction with the given args.
+// handler will be called with the reply from this specific command when
+// the transaction is executed.
 func (t *transaction) command(name string, args redis.Args, handler replyHandler) {
 	t.actions = append(t.actions, &action{
 		kind:    actionCommand,
@@ -43,6 +55,9 @@ func (t *transaction) command(name string, args redis.Args, handler replyHandler
 	})
 }
 
+// command adds a script action to the transaction with the given args.
+// handler will be called with the reply from this specific script when
+// the transaction is executed.
 func (t *transaction) script(script *redis.Script, args redis.Args, handler replyHandler) {
 	t.actions = append(t.actions, &action{
 		kind:    actionScript,
@@ -52,6 +67,7 @@ func (t *transaction) script(script *redis.Script, args redis.Args, handler repl
 	})
 }
 
+// sendAction writes a to a connection buffer using conn.Send()
 func (t *transaction) sendAction(a *action) error {
 	switch a.kind {
 	case actionCommand:
@@ -62,6 +78,8 @@ func (t *transaction) sendAction(a *action) error {
 	return nil
 }
 
+// doAction writes a to the connection buffer and then immediately
+// flushes the buffer and reads the reply via conn.Do()
 func (t *transaction) doAction(a *action) (interface{}, error) {
 	switch a.kind {
 	case actionCommand:
@@ -72,6 +90,8 @@ func (t *transaction) doAction(a *action) (interface{}, error) {
 	return nil, nil
 }
 
+// exec executes the transaction, sequentially sending each action and
+// calling all the action handlers with the corresponding replies.
 func (t *transaction) exec() error {
 	// Return the connection to the pool when we are done
 	defer t.conn.Close()
@@ -143,7 +163,7 @@ func newScanJobsHandler(jobs *[]*Job) replyHandler {
 	}
 }
 
-// debug set simply prints out the value of the given set
+// debugSet simply prints out the value of the given set
 func (t *transaction) debugSet(setName string) {
 	t.command("ZRANGE", redis.Args{setName, 0, -1, "WITHSCORES"}, func(reply interface{}) error {
 		vals, err := redis.Strings(reply, nil)

@@ -67,6 +67,8 @@ func TestGetNextJobs(t *testing.T) {
 	}
 }
 
+// TestJobStatusIsExecutingWhileExecuting tests that while a job is executing, its
+// status is set to StatusExecuting.
 func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
@@ -421,7 +423,7 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 }
 
 // TestJobTimestamps creates and executes a job, then tests that the started and finished
-// values were correct.
+// timestamps were correct.
 func TestJobTimestamps(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
@@ -544,7 +546,7 @@ OuterLoop:
 }
 
 // TestJobFail creates and executes a job that is guaranteed to fail, then tests that
-// the error was captured and stored correctly and that the job is in the failed set
+// the error was captured and stored correctly and that the job status was set to failed.
 func TestJobFail(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
@@ -650,9 +652,9 @@ OuterLoop:
 	}
 }
 
-// expectTestDataOk reports an error if any elements in data do not equal "ok". It is only used for
-// tests in this file. Many of the tests use a slice of strings as data and queue up jobs to set one
-// of the elements to "ok", so this makes checking them easier.
+// expectTestDataOk reports an error via t.Errorf if any elements in data do not equal "ok". It is only
+// used for tests in this file. Many of the tests use a slice of strings as data and queue up jobs to
+// set one of the elements to "ok", so this makes checking them easier.
 func expectTestDataOk(t *testing.T, data []string) {
 	for i, datum := range data {
 		if datum != "ok" {
@@ -671,41 +673,41 @@ func expectTestDataBlank(t *testing.T, data []string) {
 	}
 }
 
-// expectTimeNotZero reports an error if x is equal to the zero time.
+// expectTimeNotZero reports an error via t.Errorf if x is equal to the zero time.
 func expectTimeNotZero(t *testing.T, x time.Time) {
 	if x.IsZero() {
 		t.Errorf("Expected time x to be non-zero but got zero.")
 	}
 }
 
-// expectTimeAfter reports an error if x is not after the given time.
+// expectTimeAfter reports an error via t.Errorf if x is not after the given time.
 func expectTimeAfter(t *testing.T, x, after time.Time) {
 	if !x.After(after) {
 		t.Errorf("time x was incorrect. Expected it to be after %v but got %v.", after, x)
 	}
 }
 
-// expectTimeBefore reports an error if x is not before the given time.
+// expectTimeBefore reports an error via t.Errorf if x is not before the given time.
 func expectTimeBefore(t *testing.T, x, before time.Time) {
 	if !x.Before(before) {
 		t.Errorf("time x was incorrect. Expected it to be before %v but got %v.", before, x)
 	}
 }
 
-// expectTimeBetween reports an error if x is not before and after the given times.
+// expectTimeBetween reports an error via t.Errorf if x is not before and after the given times.
 func expectTimeBetween(t *testing.T, x, before, after time.Time) {
 	expectTimeBefore(t, x, before)
 	expectTimeAfter(t, x, after)
 }
 
-// expectDurationNotZero reports an error if d is equal to zero.
+// expectDurationNotZero reports an error via t.Errorf if d is equal to zero.
 func expectDurationNotZero(t *testing.T, d time.Duration) {
 	if d.Nanoseconds() == 0 {
 		t.Errorf("Expected duration d to be non-zero but got zero.")
 	}
 }
 
-// expectDurationBetween reports an error if d is not more than min and less than max.
+// expectDurationBetween reports an error via t.Errorf if d is not more than min and less than max.
 func expectDurationBetween(t *testing.T, d, min, max time.Duration) {
 	if !(d > min) {
 		t.Errorf("duration d was incorrect. Expected it to be more than %v but got %v.", min, d)

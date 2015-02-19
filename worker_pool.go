@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Pool represents a pool of workers. Pool will query the database for queued jobs
+// Pool is a pool of workers. Pool will query the database for queued jobs
 // and delegate those jobs to some number of workers. It will do this continuously
 // until the main program exits or you call Pool.Close().
 var Pool = &workerPoolType{}
@@ -32,6 +32,8 @@ func (w *worker) start() {
 	}()
 }
 
+// doJob executes the given job. It also sets the status and timestamps for
+// the job appropriately depending on the outcome of the execution.
 func (w *worker) doJob(job *Job) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -138,15 +140,19 @@ func (wp *workerPoolType) Start() {
 }
 
 // Close closes the worker pool and prevents it from delegating
-// any new jobs. It returns immediately. If you want to wait until
-// all workers are done executing their current jobs, use the Wait
-// method.
+// any new jobs. However, any jobs that are currently being executed
+// will still be executed. Close returns immediately. If you want to
+// wait until all workers are done executing their current jobs, use the
+// Wait method.
 func (wp *workerPoolType) Close() {
 	wp.exit <- true
 }
 
 // Wait will return when all workers are done executing their jobs.
-// Wait can only possibly return after you have called Close.
+// Wait can only possibly return after you have called Close. To prevent
+// errors due to partially-executed jobs, any go program which starts a
+// worker pool should call Wait (and Close before that if needed) before
+// exiting.
 func (wp *workerPoolType) Wait() {
 	// The shared waitgroup will only return after each worker is finished
 	wp.wg.Wait()
@@ -175,6 +181,9 @@ func (wp *workerPoolType) queryLoop() error {
 	return nil
 }
 
+// sendNextJobs queries the database to find the next n ready jobs, then
+// sends those jobs to the jobs channel, effectively delegating them to
+// a worker.
 func (wp *workerPoolType) sendNextJobs(n int) error {
 	jobs, err := getNextJobs(Config.Pool.BatchSize)
 	if err != nil {
@@ -188,6 +197,7 @@ func (wp *workerPoolType) sendNextJobs(n int) error {
 	return nil
 }
 
+// getNextJobs queries the database and returns the next n ready jobs.
 func getNextJobs(n int) ([]*Job, error) {
 	// Start a new transaction
 	t := newTransaction()

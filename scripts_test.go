@@ -33,7 +33,8 @@ func TestPopNextJobsScript(t *testing.T) {
 	// Start a new transaction and execute the script
 	tx1 := newTransaction()
 	gotJobs := []*Job{}
-	tx1.popNextJobs(2, newScanJobsHandler(&gotJobs))
+	testPoolId := "testPool"
+	tx1.popNextJobs(2, testPoolId, newScanJobsHandler(&gotJobs))
 	if err := tx1.exec(); err != nil {
 		t.Errorf("Unexpected error executing transaction: %s", err.Error())
 	}

@@ -96,9 +96,9 @@ func init() {
 // popNextJobs is a small function wrapper around getAndMovesJobToExecutingScript.
 // It offers some type safety and helps make sure the arguments you pass through to the are correct.
 // The script will get the next n jobs from the queue that are ready based on their time parameter.
-func (t *transaction) popNextJobs(n int, handler replyHandler) {
+func (t *transaction) popNextJobs(n int, poolId string, handler replyHandler) {
 	currentTime := time.Now().UTC().UnixNano()
-	t.script(popNextJobsScript, redis.Args{n, currentTime}, handler)
+	t.script(popNextJobsScript, redis.Args{n, currentTime, poolId}, handler)
 }
 
 // retryOrFailJob is a small function wrapper around retryOrFailJobScript.

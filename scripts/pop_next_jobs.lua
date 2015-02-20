@@ -41,6 +41,7 @@
 -- Assign args to variables for easy reference
 local n = ARGV[1]
 local currentTime = ARGV[2]
+local poolId = ARGV[3]
 -- Copy the time index set to a new temporary set
 redis.call('ZUNIONSTORE', '{{.jobsTempSet}}', 1, '{{.timeIndexSet}}')
 -- Trim the new temporary set we just created to leave only the jobs which have a time
@@ -65,6 +66,8 @@ if #jobIds > 0 then
 	-- Now we are ready to construct our response.
 	for i, jobId in ipairs(jobIds) do
 		local jobKey = 'jobs:' .. jobId
+		-- Set the poolId field for the job
+		redis.call('HSET', jobKey, 'poolId', poolId)
 		-- Set the job status to executing
 		redis.call('HSET', jobKey, 'status', '{{.statusExecuting}}')
 		-- Get the fields from its main hash

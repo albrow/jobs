@@ -191,7 +191,7 @@ func (wp *workerPoolType) queryLoop() error {
 // sends those jobs to the jobs channel, effectively delegating them to
 // a worker.
 func (wp *workerPoolType) sendNextJobs(n int) error {
-	jobs, err := getNextJobs(Config.Pool.BatchSize)
+	jobs, err := wp.getNextJobs(Config.Pool.BatchSize)
 	if err != nil {
 		return err
 	}
@@ -204,13 +204,18 @@ func (wp *workerPoolType) sendNextJobs(n int) error {
 }
 
 // getNextJobs queries the database and returns the next n ready jobs.
-func getNextJobs(n int) ([]*Job, error) {
+func (wp *workerPoolType) getNextJobs(n int) ([]*Job, error) {
+	return getNextJobs(n, wp.id)
+}
+
+// getNextJobs queries the database and returns the next n ready jobs.
+func getNextJobs(n int, poolId string) ([]*Job, error) {
 	// Start a new transaction
 	t := newTransaction()
 	// Invoke a script to get all the jobs which are ready to execute based on their
 	// time parameter and whether or not they are in the queued set.
 	jobs := []*Job{}
-	t.popNextJobs(n, newScanJobsHandler(&jobs))
+	t.popNextJobs(n, poolId, newScanJobsHandler(&jobs))
 
 	// Execute the transaction
 	if err := t.exec(); err != nil {

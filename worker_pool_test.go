@@ -54,7 +54,8 @@ func TestGetNextJobs(t *testing.T) {
 
 	// Call getNextJobs with n = 1. We expect the one job returned to be the
 	// highpriority one, but the status should now be executing
-	jobs, err := getNextJobs(1)
+	testPoolId := "testPool"
+	jobs, err := getNextJobs(1, testPoolId)
 	if err != nil {
 		t.Errorf("Unexpected error from getNextJobs: %s", err.Error())
 	}
@@ -65,6 +66,7 @@ func TestGetNextJobs(t *testing.T) {
 		expectedJob := &Job{}
 		(*expectedJob) = *highPriorityJob
 		expectedJob.status = StatusExecuting
+		expectedJob.poolId = testPoolId
 		if !reflect.DeepEqual(expectedJob, gotJob) {
 			t.Errorf("Job returned by getNextJobs was incorrect.\n\tExpected: %+v\n\tBut got:  %+v", expectedJob, gotJob)
 		}

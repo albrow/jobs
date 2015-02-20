@@ -335,9 +335,12 @@ func TestAllJobsExecuted(t *testing.T) {
 
 	// Register some jobs which will simply set one of the elements in
 	// data to "ok"
+	dataMut := sync.Mutex{}
 	data := make([]string, 100)
 	setStringJob, err := RegisterJobType("setString", 0, func(i int) {
+		dataMut.Lock()
 		data[i] = "ok"
+		dataMut.Unlock()
 	})
 	if err != nil {
 		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
@@ -372,11 +375,13 @@ func TestAllJobsExecuted(t *testing.T) {
 			// Count the number of elements in data that equal "ok".
 			// Anything that doesn't equal ok represents a job that hasn't been executed yet
 			remainingJobs = len(data)
+			dataMut.Lock()
 			for _, datum := range data {
 				if datum == "ok" {
 					remainingJobs -= 1
 				}
 			}
+			dataMut.Unlock()
 			if remainingJobs == 0 {
 				// Each item in data was set to "ok", so all the jobs were executed correctly.
 				return
@@ -403,8 +408,11 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 	// For this test, we want to execute two jobs at a time, so we'll
 	// use a waitgroup.
 	data := make([]string, 4)
+	dataMut := sync.Mutex{}
 	setStringJob, err := RegisterJobType("setString", 0, func(i int) {
+		dataMut.Lock()
 		data[i] = "ok"
+		dataMut.Unlock()
 	})
 	if err != nil {
 		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
@@ -442,12 +450,14 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 		case <-interval:
 			// Count the number of elements in data that equal "ok".
 			// Anything that doesn't equal ok represents a job that hasn't been executed yet
+			dataMut.Lock()
 			remainingJobs = len(data)
 			for _, datum := range data {
 				if datum == "ok" {
 					remainingJobs -= 1
 				}
 			}
+			dataMut.Unlock()
 			if remainingJobs == 0 {
 				// Each item in data was set to "ok", so all the jobs were executed correctly.
 				// Check that this happend after futureTime

@@ -283,6 +283,8 @@ func (wp *workerPoolType) Start() error {
 		wp.id = generateRandomId()
 	}
 	// Do some bookkeeping related checking status of worker pools
+	wp.wg = &sync.WaitGroup{}
+	wp.exit = make(chan bool)
 	if err := wp.addToPoolSet(); err != nil {
 		return err
 	}
@@ -304,8 +306,6 @@ func (wp *workerPoolType) Start() error {
 	// Initialize the fields of wp
 	wp.workers = make([]*worker, Config.Pool.NumWorkers)
 	wp.jobs = make(chan *Job, Config.Pool.BatchSize)
-	wp.wg = &sync.WaitGroup{}
-	wp.exit = make(chan bool)
 	for i := range wp.workers {
 		wp.wg.Add(1)
 		worker := &worker{}

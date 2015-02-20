@@ -128,6 +128,32 @@ var (
 	}
 )
 
+// expectSetContains sets an error via t.Errorf if member is not in the set
+func expectSetContains(t *testing.T, setName string, member string) {
+	conn := redisPool.Get()
+	defer conn.Close()
+	contains, err := redis.Bool(conn.Do("SISMEMBER", setName, member))
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err.Error())
+	}
+	if !contains {
+		t.Errorf("Expected set %s to contain %s but it did not.", setName, member)
+	}
+}
+
+// expectSetDoesNotContain sets an error via t.Errorf if member is in the set
+func expectSetDoesNotContain(t *testing.T, setName string, member string) {
+	conn := redisPool.Get()
+	defer conn.Close()
+	contains, err := redis.Bool(conn.Do("SISMEMBER", setName, member))
+	if err != nil {
+		t.Errorf("Unexpected error: %s", err.Error())
+	}
+	if contains {
+		t.Errorf("Expected set %s to not contain %s but it did.", setName, member)
+	}
+}
+
 // expectJobInStatusSet sets an error via t.Errorf if job is not in the status set
 // corresponding to status.
 func expectJobInStatusSet(t *testing.T, j *Job, status JobStatus) {

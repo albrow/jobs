@@ -16,7 +16,23 @@ import (
 	"time"
 )
 
-// TestNextJobs tests the getNextJobs function, which queries the database to find
+// TestPoolIdSet tests that the pool id is set properly when a pool is started
+// and removed when it is closed
+func TestPoolIdSet(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	if err := Pool.Start(); err != nil {
+		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
+	}
+	expectSetContains(t, keys.activePools, Pool.id)
+	if err := Pool.Close(); err != nil {
+		t.Errorf("Unexpected error in pool.Close(): %s", err.Error())
+	}
+	expectSetDoesNotContain(t, keys.activePools, Pool.id)
+}
+
+// TestGetNextJobs tests the getNextJobs function, which queries the database to find
 // the next queued jobs, in order of their priority.
 func TestGetNextJobs(t *testing.T) {
 	testingSetUp()
@@ -160,7 +176,9 @@ func TestExecuteJobWithNoArguments(t *testing.T) {
 	// Start the pool with 1 worker
 	Config.Pool.NumWorkers = 1
 	Config.Pool.BatchSize = 1
-	Pool.Start()
+	if err := Pool.Start(); err != nil {
+		t.Errorf("Unexpected error in Pool.Start(): %s", err.Error())
+	}
 
 	// Immediately close the pool and wait for workers to finish
 	Pool.Close()
@@ -208,7 +226,9 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 	Pool.Start()
 
 	// Immediately stop the pool to stop the workers from doing more jobs
-	Pool.Close()
+	if err := Pool.Close(); err != nil {
+		t.Errorf("Unexpected error in Pool.Close(): %s", err.Error())
+	}
 
 	// Wait for the workers to finish
 	Pool.Wait()

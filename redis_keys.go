@@ -13,7 +13,11 @@ var keys = struct {
 	// jobsTemp is the key for a temporary set which is created and then destroyed
 	// during the process of getting the next jobs in the queue.
 	jobsTemp string
+	// activePools is the key for a set which holds the pool ids for all active
+	// pools.
+	activePools string
 }{
 	jobsTimeIndex: "jobs:time",
 	jobsTemp:      "jobs:temp",
+	activePools:   "pools:active",
 }

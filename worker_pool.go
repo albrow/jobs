@@ -120,11 +120,36 @@ type workerPoolType struct {
 	exit chan bool
 }
 
+// addToPoolSet adds the id of the worker pool to a set of active pools
+// in the database.
+func (wp *workerPoolType) addToPoolSet() error {
+	conn := redisPool.Get()
+	defer conn.Close()
+	if _, err := conn.Do("SADD", keys.activePools, wp.id); err != nil {
+		return err
+	}
+	return nil
+}
+
+// removeFromPoolSet removes the id of the worker pool from a set of active pools
+// in the database.
+func (wp *workerPoolType) removeFromPoolSet() error {
+	conn := redisPool.Get()
+	defer conn.Close()
+	if _, err := conn.Do("SREM", keys.activePools, wp.id); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Start starts the worker pool. This means the pool will initialize workers,
 // continuously query the database for queued jobs, and delegate those jobs
 // to the workers.
-func (wp *workerPoolType) Start() {
+func (wp *workerPoolType) Start() error {
 	wp.id = generateRandomId()
+	if err := wp.addToPoolSet(); err != nil {
+		return err
+	}
 	wp.workers = make([]*worker, Config.Pool.NumWorkers)
 	wp.jobs = make(chan *Job, Config.Pool.BatchSize)
 	wp.wg = &sync.WaitGroup{}
@@ -143,6 +168,7 @@ func (wp *workerPoolType) Start() {
 			panic(err)
 		}
 	}()
+	return nil
 }
 
 // Close closes the worker pool and prevents it from delegating
@@ -150,8 +176,12 @@ func (wp *workerPoolType) Start() {
 // will still be executed. Close returns immediately. If you want to
 // wait until all workers are done executing their current jobs, use the
 // Wait method.
-func (wp *workerPoolType) Close() {
+func (wp *workerPoolType) Close() error {
 	wp.exit <- true
+	if err := wp.removeFromPoolSet(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Wait will return when all workers are done executing their jobs.

@@ -2,7 +2,7 @@
 // Use of this source code is governed by the MIT
 // license, which can be found in the LICENSE file.
 
-package zazu
+package jobs
 
 import (
 	"bytes"
@@ -18,7 +18,7 @@ func decode(reply []byte, dest interface{}) error {
 	// otherwise we can't set its value in any meaningful way.
 	val := reflect.ValueOf(dest)
 	if val.Kind() != reflect.Ptr {
-		return fmt.Errorf("zazu: Argument to decode must be pointer. Got %T", dest)
+		return fmt.Errorf("jobs: Argument to decode must be pointer. Got %T", dest)
 	}
 
 	// Use the gob package to decode the reply and write the result into

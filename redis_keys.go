@@ -2,7 +2,7 @@
 // Use of this source code is governed by the MIT
 // license, which can be found in the LICENSE file.
 
-package zazu
+package jobs
 
 // keys stores any constant redis keys. By storing them all here,
 // we avoid using string literals which are prone to typos.

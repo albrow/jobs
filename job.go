@@ -2,7 +2,7 @@
 // Use of this source code is governed by the MIT
 // license, which can be found in the LICENSE file.
 
-package zazu
+package jobs
 
 import (
 	"fmt"
@@ -224,7 +224,7 @@ func (j *Job) setError(err error) error {
 // being executed by a worker, the worker may still finish the job.
 func (j *Job) Destroy() error {
 	if j.id == "" {
-		return fmt.Errorf("zazu: Cannot destroy job that doesn't have an id.")
+		return fmt.Errorf("jobs: Cannot destroy job that doesn't have an id.")
 	}
 	// Start a new transaction
 	t := newTransaction()
@@ -242,10 +242,10 @@ func (j *Job) Destroy() error {
 // status set.
 func (j *Job) setStatus(status JobStatus) error {
 	if j.id == "" {
-		return fmt.Errorf("zazu: Cannot set status to %s because job doesn't have an id.", status)
+		return fmt.Errorf("jobs: Cannot set status to %s because job doesn't have an id.", status)
 	}
 	if j.status == StatusDestroyed {
-		return fmt.Errorf("zazu: Cannot set job:%s status to %s because it was destroyed.", j.id, status)
+		return fmt.Errorf("jobs: Cannot set job:%s status to %s because it was destroyed.", j.id, status)
 	}
 	// Use a transaction to move the job to the appropriate status set and set its status
 	t := newTransaction()
@@ -285,12 +285,12 @@ func scanJob(reply interface{}, job *Job) error {
 		return err
 	}
 	if len(fields)%2 != 0 {
-		return fmt.Errorf("zazu: In scanJob: Expected length of fields to be even but got: %d", len(fields))
+		return fmt.Errorf("jobs: In scanJob: Expected length of fields to be even but got: %d", len(fields))
 	}
 	for i := 0; i < len(fields)-1; i += 2 {
 		fieldName, err := redis.String(fields[i], nil)
 		if err != nil {
-			return fmt.Errorf("zazu: In scanJob: Could not convert fieldName (fields[%d] = %v) of type %T to string.", i, fields[i], fields[i])
+			return fmt.Errorf("jobs: In scanJob: Could not convert fieldName (fields[%d] = %v) of type %T to string.", i, fields[i], fields[i])
 		}
 		fieldValue := fields[i+1]
 		switch fieldName {
@@ -309,7 +309,7 @@ func scanJob(reply interface{}, job *Job) error {
 			}
 			jobType, found := jobTypes[typeName]
 			if !found {
-				return fmt.Errorf("zazu: In scanJob: Could not find JobType with name = %s", typeName)
+				return fmt.Errorf("jobs: In scanJob: Could not find JobType with name = %s", typeName)
 			}
 			job.typ = jobType
 		case "time":
@@ -354,11 +354,11 @@ func scanJob(reply interface{}, job *Job) error {
 // scanInt converts a reply from redis into an int and scans the value into v.
 func scanInt(reply interface{}, v *int) error {
 	if v == nil {
-		return fmt.Errorf("zazu: In scanInt: argument v was nil")
+		return fmt.Errorf("jobs: In scanInt: argument v was nil")
 	}
 	val, err := redis.Int(reply, nil)
 	if err != nil {
-		return fmt.Errorf("zazu: In scanInt: Could not convert %v of type %T to int.", reply, reply)
+		return fmt.Errorf("jobs: In scanInt: Could not convert %v of type %T to int.", reply, reply)
 	}
 	(*v) = val
 	return nil
@@ -367,11 +367,11 @@ func scanInt(reply interface{}, v *int) error {
 // scanUint converts a reply from redis into a uint and scans the value into v.
 func scanUint(reply interface{}, v *uint) error {
 	if v == nil {
-		return fmt.Errorf("zazu: In scanUint: argument v was nil")
+		return fmt.Errorf("jobs: In scanUint: argument v was nil")
 	}
 	val, err := redis.Uint64(reply, nil)
 	if err != nil {
-		return fmt.Errorf("zazu: In scanUint: Could not convert %v of type %T to uint.", reply, reply)
+		return fmt.Errorf("jobs: In scanUint: Could not convert %v of type %T to uint.", reply, reply)
 	}
 	(*v) = uint(val)
 	return nil
@@ -380,11 +380,11 @@ func scanUint(reply interface{}, v *uint) error {
 // scanInt64 converts a reply from redis into an int64 and scans the value into v.
 func scanInt64(reply interface{}, v *int64) error {
 	if v == nil {
-		return fmt.Errorf("zazu: In scanInt64: argument v was nil")
+		return fmt.Errorf("jobs: In scanInt64: argument v was nil")
 	}
 	val, err := redis.Int64(reply, nil)
 	if err != nil {
-		return fmt.Errorf("zazu: In scanInt64: Could not convert %v of type %T to int64.", reply, reply)
+		return fmt.Errorf("jobs: In scanInt64: Could not convert %v of type %T to int64.", reply, reply)
 	}
 	(*v) = val
 	return nil
@@ -393,11 +393,11 @@ func scanInt64(reply interface{}, v *int64) error {
 // scanString converts a reply from redis into a string and scans the value into v.
 func scanString(reply interface{}, v *string) error {
 	if v == nil {
-		return fmt.Errorf("zazu: In String: argument v was nil")
+		return fmt.Errorf("jobs: In String: argument v was nil")
 	}
 	val, err := redis.String(reply, nil)
 	if err != nil {
-		return fmt.Errorf("zazu: In String: Could not convert %v of type %T to string.", reply, reply)
+		return fmt.Errorf("jobs: In String: Could not convert %v of type %T to string.", reply, reply)
 	}
 	(*v) = val
 	return nil
@@ -406,11 +406,11 @@ func scanString(reply interface{}, v *string) error {
 // scanBytes converts a reply from redis into a slice of bytes and scans the value into v.
 func scanBytes(reply interface{}, v *[]byte) error {
 	if v == nil {
-		return fmt.Errorf("zazu: In scanBytes: argument v was nil")
+		return fmt.Errorf("jobs: In scanBytes: argument v was nil")
 	}
 	val, err := redis.Bytes(reply, nil)
 	if err != nil {
-		return fmt.Errorf("zazu: In scanBytes: Could not convert %v of type %T to []byte.", reply, reply)
+		return fmt.Errorf("jobs: In scanBytes: Could not convert %v of type %T to []byte.", reply, reply)
 	}
 	(*v) = val
 	return nil

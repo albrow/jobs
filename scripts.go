@@ -2,7 +2,7 @@
 // Use of this source code is governed by the MIT
 // license, which can be found in the LICENSE file.
 
-package zazu
+package jobs
 
 import (
 	"bytes"
@@ -47,7 +47,7 @@ var (
 )
 
 var (
-	scriptsPath = filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "albrow", "zazu", "scripts")
+	scriptsPath = filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "albrow", "jobs", "scripts")
 )
 
 func init() {

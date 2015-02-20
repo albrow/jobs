@@ -2,7 +2,7 @@
 // Use of this source code is governed by the MIT
 // license, which can be found in the LICENSE file.
 
-package zazu
+package jobs
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ type ErrorNameAlreadyRegistered struct {
 
 // Error satisfies the error interface.
 func (e ErrorNameAlreadyRegistered) Error() string {
-	return fmt.Sprintf("zazu: Cannot register job type because job type with name %s already exists", e.name)
+	return fmt.Sprintf("jobs: Cannot register job type because job type with name %s already exists", e.name)
 }
 
 // newErrorNameAlreadyRegistered returns an ErrorNameAlreadyRegistered with the given name.
@@ -53,10 +53,10 @@ func RegisterJobType(name string, retries uint, handler interface{}) (*JobType, 
 	// Make sure handler is a function
 	handlerType := reflect.TypeOf(handler)
 	if handlerType.Kind() != reflect.Func {
-		return nil, fmt.Errorf("zazu: in RegisterNewJobType, handler must be a function. Got %T", handler)
+		return nil, fmt.Errorf("jobs: in RegisterNewJobType, handler must be a function. Got %T", handler)
 	}
 	if handlerType.NumIn() > 1 {
-		return nil, fmt.Errorf("zazu: in RegisterNewJobType, handler must accept 0 or 1 arguments. Got %d.", handlerType.NumIn())
+		return nil, fmt.Errorf("jobs: in RegisterNewJobType, handler must accept 0 or 1 arguments. Got %d.", handlerType.NumIn())
 	}
 	jobType := &JobType{
 		name:    name,
@@ -137,12 +137,12 @@ func (jt *JobType) encodeData(data interface{}) ([]byte, error) {
 	// Check the type of data
 	dataType := reflect.TypeOf(data)
 	if dataType != jt.dataType {
-		return nil, fmt.Errorf("zazu: provided data was not of the correct type.\nExpected %s for JobType %s, but got %s", jt.dataType, jt, dataType)
+		return nil, fmt.Errorf("jobs: provided data was not of the correct type.\nExpected %s for JobType %s, but got %s", jt.dataType, jt, dataType)
 	}
 	// Encode the data
 	encodedData, err := encode(data)
 	if err != nil {
-		return nil, fmt.Errorf("zazu: error encoding data: %s", err.Error())
+		return nil, fmt.Errorf("jobs: error encoding data: %s", err.Error())
 	}
 	return encodedData, nil
 }

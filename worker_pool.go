@@ -142,6 +142,18 @@ func (wp *workerPoolType) removeFromPoolSet() error {
 	return nil
 }
 
+// pingKey is the key for a pub/sub connection which allows a pool to ping, i.e.
+// check the status of, another pool.
+func (wp *workerPoolType) pingKey() error {
+	return "workers:" + wp.id + ":ping"
+}
+
+// pongKey is the key for a pub/sub connection which allows a pool to respond to
+// pings with a pong, i.e. acknowledge that it is still alive and working.
+func (wp *workerPoolType) pongKey() error {
+	return "workers:" + wp.id + ":pong"
+}
+
 // Start starts the worker pool. This means the pool will initialize workers,
 // continuously query the database for queued jobs, and delegate those jobs
 // to the workers.

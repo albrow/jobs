@@ -73,7 +73,9 @@
 //
 // You can start the pool by calling the Start method.
 //
-//  zazu.Pool.Start()
+//  if err := zazu.Pool.Start(); err != nil {
+//      // Handle err
+//  }
 //
 // Once started the Pool will continue to query the database for new jobs and delegate those jobs to
 // some number of concurrent workers. To stop the Pool manually, you can use Pool.Close(). Then you can
@@ -84,7 +86,9 @@
 //
 //  func main() {
 //	     defer func() {
-//	         zazu.Pool.Close()
+//	         if err := zazu.Pool.Close(); err != nil {
+//              // Handle err
+//          }
 //	         zazu.Pool.Wait()
 //      }
 //  }

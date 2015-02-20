@@ -80,7 +80,9 @@ zazu.Config.Pool.MinWait = 10 * time.Millisecond
 You can start the pool by calling the Start method.
 
 ``` go
-zazu.Pool.Start()
+if err := zazu.Pool.Start(); err != nil {
+	// Handle err
+}
 ```
 
 Once started the Pool will continue to query the database for new jobs and delegate those jobs to
@@ -93,7 +95,9 @@ can do so by wrapping Close and Wait in a defer statement like so:
 ``` go
 func main() {
 	defer func() {
-		zazu.Pool.Close()
+		if err := zazu.Pool.Close(); err != nil {
+			// Handle err
+		}
 		zazu.Pool.Wait()
 	}
 }

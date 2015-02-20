@@ -54,6 +54,11 @@ type poolConfig struct {
 	// if the jobs channel is blocking (i.e. if no workers are ready to execute new
 	// jobs). Default is 200ms.
 	MinWait time.Duration
+	// StaleTimeout is the amount of time to wait for a pool to reply to a ping request
+	// before considering it stale. Stale pools will be purged and if they have any
+	// corresponding jobs in the executing set, those jobs will be requeued. Default
+	// is 30 seconds.
+	StaleTimeout time.Duration
 }
 
 // Config is where all configuration variables are stored. You may modify Config
@@ -61,9 +66,10 @@ type poolConfig struct {
 // of your program.
 var Config = configType{
 	Pool: poolConfig{
-		NumWorkers: runtime.GOMAXPROCS(0),
-		BatchSize:  runtime.GOMAXPROCS(0),
-		MinWait:    200 * time.Millisecond,
+		NumWorkers:   runtime.GOMAXPROCS(0),
+		BatchSize:    runtime.GOMAXPROCS(0),
+		MinWait:      200 * time.Millisecond,
+		StaleTimeout: 30 * time.Second,
 	},
 	Db: databaseConfig{
 		Address:  "localhost:6379",

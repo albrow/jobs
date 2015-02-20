@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dustin/go-humanize"
+	"github.com/garyburd/redigo/redis"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -695,6 +696,128 @@ OuterLoop:
 			}
 		}
 	}
+}
+
+// TestStalePoolsArePurged tests that stale pools are properly purged when an active pool starts.
+// It does this by manually instantiating a pool, queueing some jobs in it, and then causing it to
+// go stale by changing its id (effectively preventing it from replying to pings).
+func TestStalePoolsArePurged(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	// Manually create and start a pool with one worker
+	Config.Pool.NumWorkers = 1
+	Config.Pool.BatchSize = 1
+	Config.Pool.MinWait = 10 * time.Millisecond
+	Config.Pool.StaleTimeout = 20 * time.Millisecond
+	stalePool := &workerPoolType{id: "stalePool"}
+	if err := stalePool.Start(); err != nil {
+		t.Errorf("Unexpected error in stalePool.Start(): %s", err.Error())
+	}
+
+	jobsCanFinish := make(chan bool)
+	stalePoolNeedsClose := true
+	defer func() {
+		// Indicate that all outstanding jobs can finish by closing the channel
+		close(jobsCanFinish)
+		// Close both pools and wait for workers to finish
+		Pool.Close()
+		if err := Pool.Wait(); err != nil {
+			t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+		}
+		if stalePoolNeedsClose {
+			stalePool.Close()
+		}
+		if err := stalePool.Wait(); err != nil {
+			t.Errorf("Unexpected error in stalePool.Wait(): %s", err.Error())
+		}
+	}()
+
+	// Register a job type which will signal and then wait for a channel to close
+	// before finishing
+	jobStarted := make(chan bool)
+	signalAndWaitJob, err := RegisterJobType("signalAndWaitJob", 0, func() {
+		jobStarted <- true
+		for range jobsCanFinish {
+		}
+	})
+	if err != nil {
+		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+	}
+
+	// Queue up a job
+	job, err := signalAndWaitJob.Schedule(100, time.Now(), nil)
+	if err != nil {
+		t.Errorf("Error in signalAndWaitJob.Schedule: %s", err.Error())
+	}
+
+	// Wait for the job to start
+	<-jobStarted
+
+	// Now change the id of the stalePool so that it will no longer reply to pings properly
+	oldId := stalePool.id
+	oldPingKey := stalePool.pingKey()
+	stalePool.id = "invalidId"
+
+	// Create a conn we can use to listen for the stale pool to be pinged
+	ping := &redis.PubSubConn{redisPool.Get()}
+	if err := ping.Subscribe(oldPingKey); err != nil {
+		t.Errorf("Unexpected error in ping.Subscribe(): %s", err.Error())
+	}
+	pingChan := make(chan interface{})
+	go func() {
+		defer ping.Close()
+		for {
+			reply := ping.Receive()
+			switch reply.(type) {
+			case redis.Message:
+				// The ping was received
+				pingChan <- reply
+				return
+			case error:
+				err := reply.(error)
+				panic(err)
+			}
+			time.Sleep(1 * time.Millisecond)
+		}
+	}()
+
+	// Start the second pool. We expect this to trigger a purge of the stale pool
+	if err := Pool.Start(); err != nil {
+		t.Errorf("Unexpected error in Pool.Start(): %s", err.Error())
+	}
+
+	// Wait for the stale pool to be pinged or timeout after 1 second
+	timeout := time.After(1 * time.Second)
+	select {
+	case <-pingChan:
+		// If we received a ping, close the stale pool and continue with the test
+		stalePool.Close()
+		stalePoolNeedsClose = false
+	case <-timeout:
+		fmt.Println("timeout")
+		t.Errorf("1 second passed but the stale pool was never pinged")
+		t.FailNow()
+		return
+	}
+
+	// If we've reached here, the stale pool was pinged. We should wait to receive
+	// from the channel again to indicate that the job was requeued and picked up by
+	// the new pool.
+	timeout = time.After(1 * time.Second)
+	select {
+	case <-jobStarted:
+		// If the job started again, continue with the test
+	case <-timeout:
+		fmt.Println("timeout")
+		t.Errorf("1 second passed but the job was never started again.")
+		t.FailNow()
+		return
+	}
+
+	// At this point, the stale pool should have been fully purged.
+	expectSetDoesNotContain(t, keys.activePools, oldId)
+	expectJobFieldEquals(t, job, "poolId", Pool.id, stringConverter)
 }
 
 // expectTestDataOk reports an error via t.Errorf if any elements in data do not equal "ok". It is only

@@ -10,7 +10,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/garyburd/redigo/redis"
 	"reflect"
-	"runtime"
 	"strconv"
 	"sync"
 	"testing"
@@ -23,15 +22,16 @@ func TestPoolIdSet(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
-	if err := Pool.Start(); err != nil {
+	pool := NewPool(nil)
+	if err := pool.Start(); err != nil {
 		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
 	}
-	expectSetContains(t, keys.activePools, Pool.id)
-	Pool.Close()
-	if err := Pool.Wait(); err != nil {
-		t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+	expectSetContains(t, keys.activePools, pool.id)
+	pool.Close()
+	if err := pool.Wait(); err != nil {
+		t.Errorf("Unexpected error in pool.Wait(): %s", err.Error())
 	}
-	expectSetDoesNotContain(t, keys.activePools, Pool.id)
+	expectSetDoesNotContain(t, keys.activePools, pool.id)
 }
 
 // TestGetNextJobs tests the getNextJobs function, which queries the database to find
@@ -97,11 +97,17 @@ func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
+	// Create a pool with 4 workers
+	pool := NewPool(&PoolConfig{
+		NumWorkers: 4,
+		BatchSize:  4,
+		MinWait:    1 * time.Millisecond,
+	})
 	defer func() {
 		// Close the pool and wait for workers to finish
-		Pool.Close()
-		if err := Pool.Wait(); err != nil {
-			t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+		pool.Close()
+		if err := pool.Wait(); err != nil {
+			t.Errorf("Unexpected error in pool.Wait(): %s", err.Error())
 		}
 	}()
 
@@ -134,12 +140,10 @@ func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 		queuedJobs[i] = job
 	}
 
-	// Start the pool with 4 workers
-	runtime.GOMAXPROCS(4)
-	Config.Pool.NumWorkers = 4
-	Config.Pool.BatchSize = 4
-	Config.Pool.MinWait = 0 * time.Millisecond
-	Pool.Start()
+	// Start the pool
+	if err := pool.Start(); err != nil {
+		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
+	}
 
 	// Wait for the jobs to finish setting their data
 	waitForJobs.Wait()
@@ -178,16 +182,18 @@ func TestExecuteJobWithNoArguments(t *testing.T) {
 	}
 
 	// Start the pool with 1 worker
-	Config.Pool.NumWorkers = 1
-	Config.Pool.BatchSize = 1
-	if err := Pool.Start(); err != nil {
-		t.Errorf("Unexpected error in Pool.Start(): %s", err.Error())
+	pool := NewPool(&PoolConfig{
+		NumWorkers: 1,
+		BatchSize:  1,
+	})
+	if err := pool.Start(); err != nil {
+		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
 	}
 
 	// Immediately close the pool and wait for workers to finish
-	Pool.Close()
-	if err := Pool.Wait(); err != nil {
-		t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+	pool.Close()
+	if err := pool.Wait(); err != nil {
+		t.Errorf("Unexpected error in pool.Wait(): %s", err.Error())
 	}
 
 	// Make sure that data was set to "ok", indicating that the job executed
@@ -226,17 +232,20 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 	}
 
 	// Start the pool with 4 workers
-	runtime.GOMAXPROCS(4)
-	Config.Pool.NumWorkers = 4
-	Config.Pool.BatchSize = 4
-	Pool.Start()
+	pool := NewPool(&PoolConfig{
+		NumWorkers: 4,
+		BatchSize:  4,
+	})
+	if err := pool.Start(); err != nil {
+		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
+	}
 
 	// Immediately stop the pool to stop the workers from doing more jobs
-	Pool.Close()
+	pool.Close()
 
 	// Wait for the workers to finish
-	if err := Pool.Wait(); err != nil {
-		t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+	if err := pool.Wait(); err != nil {
+		t.Errorf("Unexpected error in pool.Wait(): %s", err.Error())
 	}
 
 	// Check that the first 4 values of data were set to "ok"
@@ -293,18 +302,21 @@ func TestJobsOnlyExecutedOnce(t *testing.T) {
 	}
 
 	// Start the pool with 4 workers
-	runtime.GOMAXPROCS(4)
-	Config.Pool.NumWorkers = 4
-	Config.Pool.BatchSize = 4
-	Pool.Start()
+	pool := NewPool(&PoolConfig{
+		NumWorkers: 4,
+		BatchSize:  4,
+	})
+	if err := pool.Start(); err != nil {
+		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
+	}
 
 	// Wait for the wait group, which tells us each job was executed at least once
 	waitForJobs.Wait()
 	// Close the pool, allowing for a max of one more iteration
-	Pool.Close()
+	pool.Close()
 	// Wait for the workers to finish
-	if err := Pool.Wait(); err != nil {
-		t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+	if err := pool.Wait(); err != nil {
+		t.Errorf("Unexpected error in pool.Wait(): %s", err.Error())
 	}
 
 	// Check that each value in data equals 1.
@@ -325,11 +337,17 @@ func TestAllJobsExecuted(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
+	// Create a pool with 4 workers
+	pool := NewPool(&PoolConfig{
+		NumWorkers: 4,
+		BatchSize:  4,
+		MinWait:    1 * time.Millisecond,
+	})
 	defer func() {
 		// Close the pool and wait for workers to finish
-		Pool.Close()
-		if err := Pool.Wait(); err != nil {
-			t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+		pool.Close()
+		if err := pool.Wait(); err != nil {
+			t.Errorf("Unexpected error in pool.Wait(): %s", err.Error())
 		}
 	}()
 
@@ -353,11 +371,10 @@ func TestAllJobsExecuted(t *testing.T) {
 		}
 	}
 
-	// Start the pool with 4 workers
-	runtime.GOMAXPROCS(4)
-	Config.Pool.NumWorkers = 4
-	Config.Pool.BatchSize = 4
-	Pool.Start()
+	// Start the pool
+	if err := pool.Start(); err != nil {
+		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
+	}
 
 	// Continuously check the data every 10 milliseconds. Eventually
 	// we hope to see that everything was set to "ok". If 1 second has
@@ -369,7 +386,7 @@ func TestAllJobsExecuted(t *testing.T) {
 		select {
 		case <-timeout:
 			// More than 1 second has passed. Assume something went wrong.
-			t.Errorf("1 second passed and %d jobs were not executed.", remainingJobs)
+			t.Errorf("1 second passed and %d jobs out of %d were not executed.", remainingJobs, len(data))
 			break
 		case <-interval:
 			// Count the number of elements in data that equal "ok".
@@ -396,11 +413,16 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
+	// Create a pool with 4 workers
+	pool := NewPool(&PoolConfig{
+		NumWorkers: 4,
+		BatchSize:  4,
+	})
 	defer func() {
 		// Close the pool and wait for workers to finish
-		Pool.Close()
-		if err := Pool.Wait(); err != nil {
-			t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+		pool.Close()
+		if err := pool.Wait(); err != nil {
+			t.Errorf("Unexpected error in pool.Wait(): %s", err.Error())
 		}
 	}()
 
@@ -428,11 +450,10 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 		}
 	}
 
-	// Start the pool with 4 workers
-	runtime.GOMAXPROCS(4)
-	Config.Pool.NumWorkers = 4
-	Config.Pool.BatchSize = 4
-	Pool.Start()
+	// Start the pool
+	if err := pool.Start(); err != nil {
+		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
+	}
 
 	// Continuously check the data every 10 milliseconds. Eventually
 	// we hope to see that everything was set to "ok". We will check that
@@ -491,16 +512,19 @@ func TestJobTimestamps(t *testing.T) {
 		t.Errorf("Unexpected error in sleepJob.Schedule(): %s", err.Error())
 	}
 
-	// Start the pool with 1 worker
-	runtime.GOMAXPROCS(1)
-	Config.Pool.NumWorkers = 1
-	Config.Pool.BatchSize = 1
+	// Start a new pool with 1 worker
+	pool := NewPool(&PoolConfig{
+		NumWorkers: 1,
+		BatchSize:  1,
+	})
 	poolStarted := time.Now()
-	Pool.Start()
+	if err := pool.Start(); err != nil {
+		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
+	}
 
 	// Immediately stop the pool and wait for workers to finish
-	Pool.Close()
-	if err := Pool.Wait(); err != nil {
+	pool.Close()
+	if err := pool.Wait(); err != nil {
 		t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
 	}
 	poolClosed := time.Now()
@@ -525,11 +549,17 @@ func TestRecurringJob(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
+	// Create a new pool with 1 worker
+	pool := NewPool(&PoolConfig{
+		NumWorkers: 1,
+		BatchSize:  1,
+		MinWait:    1 * time.Millisecond,
+	})
 	defer func() {
 		// Close the pool and wait for workers to finish
-		Pool.Close()
-		if err := Pool.Wait(); err != nil {
-			t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+		pool.Close()
+		if err := pool.Wait(); err != nil {
+			t.Errorf("Unexpected error in pool.Wait(): %s", err.Error())
 		}
 	}()
 
@@ -552,12 +582,10 @@ func TestRecurringJob(t *testing.T) {
 		t.Errorf("Unexpected error in ScheduleRecurring: %s", err.Error())
 	}
 
-	// Start the pool with 1 worker
-	runtime.GOMAXPROCS(1)
-	Config.Pool.NumWorkers = 1
-	Config.Pool.BatchSize = 1
-	Config.Pool.MinWait = 0 * time.Millisecond
-	Pool.Start()
+	// Start the pool
+	if err := pool.Start(); err != nil {
+		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
+	}
 
 	// Wait for three successful scheduled executions at the specified
 	// frequency, with some tolerance for variation due to execution overhead.
@@ -618,15 +646,18 @@ func TestJobFail(t *testing.T) {
 		t.Errorf("Unexpected error in failJob.Schedule(): %s", err.Error())
 	}
 
-	// Start the pool with 1 worker
-	runtime.GOMAXPROCS(1)
-	Config.Pool.NumWorkers = 1
-	Config.Pool.BatchSize = 1
-	Pool.Start()
+	// Start a new pool with 1 worker
+	pool := NewPool(&PoolConfig{
+		NumWorkers: 1,
+		BatchSize:  1,
+	})
+	if err := pool.Start(); err != nil {
+		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
+	}
 
 	// Immediately stop the pool and wait for workers to finish
-	Pool.Close()
-	if err := Pool.Wait(); err != nil {
+	pool.Close()
+	if err := pool.Wait(); err != nil {
 		t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
 	}
 
@@ -647,11 +678,17 @@ func TestRetryJob(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
+	// Create a new pool with 4 worker
+	pool := NewPool(&PoolConfig{
+		NumWorkers: 4,
+		BatchSize:  4,
+		MinWait:    1 * time.Millisecond,
+	})
 	defer func() {
 		// Close the pool and wait for workers to finish
-		Pool.Close()
-		if err := Pool.Wait(); err != nil {
-			t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+		pool.Close()
+		if err := pool.Wait(); err != nil {
+			t.Errorf("Unexpected error in pool.Wait(): %s", err.Error())
 		}
 	}()
 
@@ -681,12 +718,10 @@ func TestRetryJob(t *testing.T) {
 		t.Errorf("Unexpected error in countTriesJob.Schedule(): %s", err.Error())
 	}
 
-	// Start the pool with 4 workers
-	runtime.GOMAXPROCS(4)
-	Config.Pool.NumWorkers = 4
-	Config.Pool.BatchSize = 4
-	Config.Pool.MinWait = 2 * time.Millisecond
-	Pool.Start()
+	// Start the pool
+	if err := pool.Start(); err != nil {
+		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
+	}
 
 	// Wait for the job failed signal, or timeout if we don't receive it within 1 second
 	timeout := time.After(1 * time.Second)
@@ -715,15 +750,26 @@ func TestStalePoolsArePurged(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
-	// Manually create and start a pool with one worker
-	Config.Pool.NumWorkers = 1
-	Config.Pool.BatchSize = 1
-	Config.Pool.MinWait = 10 * time.Millisecond
-	Config.Pool.StaleTimeout = 20 * time.Millisecond
-	stalePool := &workerPoolType{id: "stalePool"}
+	// Create and start a pool with one worker
+	stalePool := NewPool(&PoolConfig{
+		NumWorkers:   1,
+		BatchSize:    1,
+		MinWait:      1 * time.Millisecond,
+		StaleTimeout: 20 * time.Millisecond,
+	})
+	stalePool.id = "stalePool"
 	if err := stalePool.Start(); err != nil {
 		t.Errorf("Unexpected error in stalePool.Start(): %s", err.Error())
 	}
+
+	// Create another pool with similar config but don't
+	// start it yet
+	newPool := NewPool(&PoolConfig{
+		NumWorkers:   1,
+		BatchSize:    1,
+		MinWait:      1 * time.Millisecond,
+		StaleTimeout: 20 * time.Millisecond,
+	})
 
 	jobsCanFinish := make(chan bool)
 	stalePoolNeedsClose := true
@@ -731,9 +777,9 @@ func TestStalePoolsArePurged(t *testing.T) {
 		// Indicate that all outstanding jobs can finish by closing the channel
 		close(jobsCanFinish)
 		// Close both pools and wait for workers to finish
-		Pool.Close()
-		if err := Pool.Wait(); err != nil {
-			t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+		newPool.Close()
+		if err := newPool.Wait(); err != nil {
+			t.Errorf("Unexpected error in newPool.Wait(): %s", err.Error())
 		}
 		if stalePoolNeedsClose {
 			stalePool.Close()
@@ -767,7 +813,9 @@ func TestStalePoolsArePurged(t *testing.T) {
 	// Now change the id of the stalePool so that it will no longer reply to pings properly
 	oldId := stalePool.id
 	oldPingKey := stalePool.pingKey()
+	stalePool.Lock()
 	stalePool.id = "invalidId"
+	stalePool.Unlock()
 
 	// Create a conn we can use to listen for the stale pool to be pinged
 	ping := &redis.PubSubConn{redisPool.Get()}
@@ -792,9 +840,9 @@ func TestStalePoolsArePurged(t *testing.T) {
 		}
 	}()
 
-	// Start the second pool. We expect this to trigger a purge of the stale pool
-	if err := Pool.Start(); err != nil {
-		t.Errorf("Unexpected error in Pool.Start(): %s", err.Error())
+	// Start the new pool. We expect this to trigger a purge of the stale pool
+	if err := newPool.Start(); err != nil {
+		t.Errorf("Unexpected error in newPool.Start(): %s", err.Error())
 	}
 
 	// Wait for the stale pool to be pinged or timeout after 1 second
@@ -827,7 +875,7 @@ func TestStalePoolsArePurged(t *testing.T) {
 
 	// At this point, the stale pool should have been fully purged.
 	expectSetDoesNotContain(t, keys.activePools, oldId)
-	expectJobFieldEquals(t, job, "poolId", Pool.id, stringConverter)
+	expectJobFieldEquals(t, job, "poolId", newPool.id, stringConverter)
 }
 
 // expectTestDataOk reports an error via t.Errorf if any elements in data do not equal "ok". It is only

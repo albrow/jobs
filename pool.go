@@ -5,9 +5,8 @@
 package jobs
 
 import (
-	"fmt"
 	"github.com/garyburd/redigo/redis"
-	"reflect"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -15,96 +14,9 @@ import (
 // Pool is a pool of workers. Pool will query the database for queued jobs
 // and delegate those jobs to some number of workers. It will do this continuously
 // until the main program exits or you call Pool.Close().
-var Pool = &workerPoolType{}
-
-// worker continuously executes jobs within its own goroutine.
-// The jobs chan is shared between all jobs. To stop the worker,
-// simply close the jobs channel.
-type worker struct {
-	jobs chan *Job
-	wg   *sync.WaitGroup
-}
-
-// start starts a goroutine in which the worker will continuously
-// execute jobs until the jobs channel is closed.
-func (w *worker) start() {
-	go func() {
-		for job := range w.jobs {
-			w.doJob(job)
-		}
-		w.wg.Done()
-	}()
-}
-
-// doJob executes the given job. It also sets the status and timestamps for
-// the job appropriately depending on the outcome of the execution.
-func (w *worker) doJob(job *Job) {
-	defer func() {
-		if r := recover(); r != nil {
-			// Get a reasonable error message from the panic
-			msg := ""
-			if err, ok := r.(error); ok {
-				msg = err.Error()
-			} else {
-				msg = fmt.Sprint(r)
-			}
-			// Start a new transaction
-			t := newTransaction()
-			// Set the job error field
-			t.command("HSET", redis.Args{job.key(), "error", msg}, nil)
-			// Either queue the job for retry or mark it as failed depending
-			// on how many retries the job has left
-			t.retryOrFailJob(job, nil)
-			if err := t.exec(); err != nil {
-				panic(err)
-			}
-		}
-	}()
-	// Set the started field and save the job
-	job.started = time.Now().UTC().UnixNano()
-	t0 := newTransaction()
-	t0.command("HSET", redis.Args{job.key(), "started", job.started}, nil)
-	if err := t0.exec(); err != nil {
-		// NOTE: panics will be caught by the recover statment above
-		panic(err)
-	}
-	// Use reflection to instantiate arguments for the handler
-	handlerArgs := []reflect.Value{}
-	if job.typ.dataType != nil {
-		// Instantiate a new variable to hold this argument
-		dataVal := reflect.New(job.typ.dataType)
-		if err := decode(job.data, dataVal.Interface()); err != nil {
-			// NOTE: panics will be caught by the recover statment above
-			panic(err)
-		}
-		handlerArgs = append(handlerArgs, dataVal.Elem())
-	}
-	// Call the handler using the arguments we just instantiated
-	handlerVal := reflect.ValueOf(job.typ.handler)
-	handlerVal.Call(handlerArgs)
-	// Set the finished timestamp
-	job.finished = time.Now().UTC().UnixNano()
-	t1 := newTransaction()
-	t1.command("HSET", redis.Args{job.key(), "finished", job.finished}, nil)
-	if job.isRecurring() {
-		// If the job is recurring, reschedule and set status to queued
-		job.time = job.nextTime()
-		t1.command("HSET", redis.Args{job.key(), "time", job.time}, nil)
-		t1.addJobToTimeIndex(job)
-		t1.setJobStatus(job, StatusQueued)
-	} else {
-		// Otherwise, set status to finished
-		t1.setJobStatus(job, StatusFinished)
-	}
-	if err := t1.exec(); err != nil {
-		// NOTE: panics will be caught by the recover statment above
-		panic(err)
-	}
-}
-
-// workerPoolType is the type of Pool. End users should not instantiate
-// their own pools, so this type is private.
-type workerPoolType struct {
+type Pool struct {
+	// config holds all config options for the pool
+	config *PoolConfig
 	// id is a unique identifier for each worker, which is generated whenver
 	// Start() is called
 	id string
@@ -118,14 +30,104 @@ type workerPoolType struct {
 	// exit is used to signal the pool to stop running the query loop
 	// and close the jobs channel
 	exit chan bool
+	// RWMutex is only used during testing when we need to
+	// change some of the fields for the pool after it was started.
+	// NOTE: currently only used in one test (TestStalePoolsArePurged)
+	// and might be removed if we refactor later.
+	sync.RWMutex
+}
+
+// PoolConfig is a set of configuration options for pools. Setting any value
+// to the zero value will be interpretted as the default.
+type PoolConfig struct {
+	// NumWorkers is the number of workers to run
+	// Each worker will run inside its own goroutine
+	// and execute jobs asynchronously. Default is
+	// runtime.GOMAXPROCS.
+	NumWorkers int
+	// BatchSize is the number of jobs to send through
+	// the jobs channel at once. Increasing BatchSize means
+	// the worker pool will query the database less frequently,
+	// so you would get higher performance. However this comes
+	// at the cost that jobs with lower priority may sometimes be
+	// executed before jobs with higher priority, because the jobs
+	// with higher priority were not ready yet the last time the pool
+	// queried the database. Decreasing BatchSize means more
+	// frequent queries to the database and lower performance, but
+	// greater likelihood of executing jobs in perfect order with regards
+	// to priority. Setting BatchSize to 1 gaurantees that higher priority
+	// jobs are always executed first as soon as they are ready. Default is
+	// runtime.GOMAXPROCS.
+	BatchSize int
+	// MinWait is the minimum amount of time the pool will wait before checking
+	// the database for queued jobs. The pool may take longer to query the database
+	// if the jobs channel is blocking (i.e. if no workers are ready to execute new
+	// jobs). Default is 200ms.
+	MinWait time.Duration
+	// StaleTimeout is the amount of time to wait for a pool to reply to a ping request
+	// before considering it stale. Stale pools will be purged and if they have any
+	// corresponding jobs in the executing set, those jobs will be requeued. Default
+	// is 30 seconds.
+	StaleTimeout time.Duration
+}
+
+// DefaultPoolConfig is the default config for pools. You can override any values
+// by passing in a *PoolConfig to NewPool. Any zero values in PoolConfig will be
+// interpreted as the default.
+var DefaultPoolConfig = &PoolConfig{
+	NumWorkers:   runtime.GOMAXPROCS(0),
+	BatchSize:    runtime.GOMAXPROCS(0),
+	MinWait:      200 * time.Millisecond,
+	StaleTimeout: 30 * time.Second,
+}
+
+// NewPool creates and returns a new pool with the given configuration. You can
+// pass in nil to use the default values. Otherwise, any zero values in config will
+// be interpreted as the default value.
+func NewPool(config *PoolConfig) *Pool {
+	finalConfig := getPoolConfig(config)
+	return &Pool{
+		config:  finalConfig,
+		id:      generateRandomId(),
+		wg:      &sync.WaitGroup{},
+		exit:    make(chan bool),
+		workers: make([]*worker, finalConfig.NumWorkers),
+		jobs:    make(chan *Job, finalConfig.BatchSize),
+	}
+}
+
+// getPoolConfig replaces any zero values in passedConfig with the default values.
+// If passedConfig is nil, every value will be set to the default.
+func getPoolConfig(passedConfig *PoolConfig) *PoolConfig {
+	if passedConfig == nil {
+		return DefaultPoolConfig
+	}
+	finalConfig := &PoolConfig{}
+	(*finalConfig) = (*passedConfig)
+	if passedConfig.NumWorkers == 0 {
+		finalConfig.NumWorkers = DefaultPoolConfig.NumWorkers
+	}
+	if passedConfig.BatchSize == 0 {
+		finalConfig.BatchSize = DefaultPoolConfig.BatchSize
+	}
+	if passedConfig.MinWait == 0 {
+		finalConfig.MinWait = DefaultPoolConfig.MinWait
+	}
+	if passedConfig.StaleTimeout == 0 {
+		finalConfig.StaleTimeout = DefaultPoolConfig.StaleTimeout
+	}
+	return finalConfig
 }
 
 // addToPoolSet adds the id of the worker pool to a set of active pools
 // in the database.
-func (wp *workerPoolType) addToPoolSet() error {
+func (p *Pool) addToPoolSet() error {
 	conn := redisPool.Get()
 	defer conn.Close()
-	if _, err := conn.Do("SADD", keys.activePools, wp.id); err != nil {
+	p.RLock()
+	thisId := p.id
+	p.RUnlock()
+	if _, err := conn.Do("SADD", keys.activePools, thisId); err != nil {
 		return err
 	}
 	return nil
@@ -133,10 +135,13 @@ func (wp *workerPoolType) addToPoolSet() error {
 
 // removeFromPoolSet removes the id of the worker pool from a set of active pools
 // in the database.
-func (wp *workerPoolType) removeFromPoolSet() error {
+func (p *Pool) removeFromPoolSet() error {
 	conn := redisPool.Get()
 	defer conn.Close()
-	if _, err := conn.Do("SREM", keys.activePools, wp.id); err != nil {
+	p.RLock()
+	thisId := p.id
+	p.RUnlock()
+	if _, err := conn.Do("SREM", keys.activePools, thisId); err != nil {
 		return err
 	}
 	return nil
@@ -144,14 +149,20 @@ func (wp *workerPoolType) removeFromPoolSet() error {
 
 // pingKey is the key for a pub/sub connection which allows a pool to ping, i.e.
 // check the status of, another pool.
-func (wp *workerPoolType) pingKey() string {
-	return "workers:" + wp.id + ":ping"
+func (p *Pool) pingKey() string {
+	p.RLock()
+	thisId := p.id
+	p.RUnlock()
+	return "workers:" + thisId + ":ping"
 }
 
 // pongKey is the key for a pub/sub connection which allows a pool to respond to
 // pings with a pong, i.e. acknowledge that it is still alive and working.
-func (wp *workerPoolType) pongKey() string {
-	return "workers:" + wp.id + ":pong"
+func (p *Pool) pongKey() string {
+	p.RLock()
+	thisId := p.id
+	p.RUnlock()
+	return "workers:" + thisId + ":pong"
 }
 
 // purgeStalePools will first get all the ids of pools from the activePools
@@ -164,7 +175,7 @@ func (wp *workerPoolType) pongKey() string {
 // any stale pools are found, purgeStalePools will remove them from the set of
 // active pools and then moves any jobs associated with the stale pool from the
 // executing set to the queued set to be retried.
-func (wp *workerPoolType) purgeStalePools() error {
+func (p *Pool) purgeStalePools() error {
 	conn := redisPool.Get()
 	defer conn.Close()
 	poolIds, err := redis.Strings(conn.Do("SMEMBERS", keys.activePools))
@@ -172,13 +183,16 @@ func (wp *workerPoolType) purgeStalePools() error {
 		return err
 	}
 	for _, poolId := range poolIds {
-		if poolId == wp.id {
+		p.RLock()
+		thisId := p.id
+		p.RUnlock()
+		if poolId == thisId {
 			// Don't ping self
 			continue
 		}
-		pool := &workerPoolType{id: poolId}
-		go func(pool *workerPoolType) {
-			if err := wp.pingAndPurgeIfNeeded(pool); err != nil {
+		pool := &Pool{id: poolId}
+		go func(pool *Pool) {
+			if err := p.pingAndPurgeIfNeeded(pool); err != nil {
 				// TODO: send accross an err channel instead of panicking
 				panic(err)
 			}
@@ -190,10 +204,9 @@ func (wp *workerPoolType) purgeStalePools() error {
 // pingAndPurgeIfNeeded pings other by publishing to others ping key. If it
 // does not receive a pong reply within some amount of time, it will
 // assume the pool is stale and purge it.
-func (wp *workerPoolType) pingAndPurgeIfNeeded(other *workerPoolType) error {
+func (p *Pool) pingAndPurgeIfNeeded(other *Pool) error {
 	ping := redisPool.Get()
 	pong := redis.PubSubConn{redisPool.Get()}
-
 	// Listen for pongs by subscribing to the other pool's pong key
 	pong.Subscribe(other.pongKey())
 	// Ping the other pool by publishing to its ping key
@@ -207,7 +220,7 @@ func (wp *workerPoolType) pingAndPurgeIfNeeded(other *workerPoolType) error {
 			ping.Close()
 		}()
 		select {
-		case <-wp.exit:
+		case <-p.exit:
 			return
 		default:
 		}
@@ -226,7 +239,7 @@ func (wp *workerPoolType) pingAndPurgeIfNeeded(other *workerPoolType) error {
 			}
 		}
 	}()
-	timeout := time.After(Config.Pool.StaleTimeout)
+	timeout := time.After(p.config.StaleTimeout)
 	select {
 	case <-pongChan:
 		// The other pool responded with a pong
@@ -237,7 +250,10 @@ func (wp *workerPoolType) pingAndPurgeIfNeeded(other *workerPoolType) error {
 	case <-timeout:
 		// The pool is considered stale and should be purged
 		t := newTransaction()
-		t.purgeStalePool(other.id)
+		other.RLock()
+		otherId := other.id
+		other.RUnlock()
+		t.purgeStalePool(otherId)
 		if err := t.exec(); err != nil {
 			return err
 		}
@@ -247,7 +263,7 @@ func (wp *workerPoolType) pingAndPurgeIfNeeded(other *workerPoolType) error {
 
 // respondToPings continuously listens for pings from other worker pools and
 // immediately responds with a pong. It will only return if there is an error.
-func (wp *workerPoolType) respondToPings() error {
+func (p *Pool) respondToPings() error {
 	pong := redisPool.Get()
 	ping := redis.PubSubConn{redisPool.Get()}
 	defer func() {
@@ -255,7 +271,7 @@ func (wp *workerPoolType) respondToPings() error {
 		ping.Close()
 	}()
 	// Subscribe to the ping key for this pool to receive pings.
-	if err := ping.Subscribe(wp.pingKey()); err != nil {
+	if err := ping.Subscribe(p.pingKey()); err != nil {
 		return err
 	}
 	for {
@@ -263,7 +279,7 @@ func (wp *workerPoolType) respondToPings() error {
 		// publishing to the pong key for this pool.
 		switch reply := ping.Receive().(type) {
 		case redis.Message:
-			if _, err := pong.Do("PUBLISH", wp.pongKey(), 0); err != nil {
+			if _, err := pong.Do("PUBLISH", p.pongKey(), 0); err != nil {
 				return err
 			}
 		case error:
@@ -277,45 +293,38 @@ func (wp *workerPoolType) respondToPings() error {
 // Start starts the worker pool. This means the pool will initialize workers,
 // continuously query the database for queued jobs, and delegate those jobs
 // to the workers.
-func (wp *workerPoolType) Start() error {
-	// Assign an id if needed
-	if wp.id == "" {
-		wp.id = generateRandomId()
-	}
+func (p *Pool) Start() error {
 	// Do some bookkeeping related checking status of worker pools
-	wp.wg = &sync.WaitGroup{}
-	wp.exit = make(chan bool)
-	if err := wp.addToPoolSet(); err != nil {
+	if err := p.addToPoolSet(); err != nil {
 		return err
 	}
 	go func() {
 		select {
-		case <-wp.exit:
+		case <-p.exit:
 			return
 		default:
 		}
-		if err := wp.respondToPings(); err != nil {
+		if err := p.respondToPings(); err != nil {
 			// TODO: send the err accross a channel instead of panicking
 			panic(err)
 		}
 	}()
-	if err := wp.purgeStalePools(); err != nil {
+	if err := p.purgeStalePools(); err != nil {
 		return err
 	}
 
-	// Initialize the fields of wp
-	wp.workers = make([]*worker, Config.Pool.NumWorkers)
-	wp.jobs = make(chan *Job, Config.Pool.BatchSize)
-	for i := range wp.workers {
-		wp.wg.Add(1)
-		worker := &worker{}
-		wp.workers[i] = worker
-		worker.wg = wp.wg
-		worker.jobs = wp.jobs
+	// Initialize workers
+	for i := range p.workers {
+		p.wg.Add(1)
+		worker := &worker{
+			wg:   p.wg,
+			jobs: p.jobs,
+		}
+		p.workers[i] = worker
 		worker.start()
 	}
 	go func() {
-		if err := wp.queryLoop(); err != nil {
+		if err := p.queryLoop(); err != nil {
 			// TODO: send the err accross a channel instead of panicking
 			panic(err)
 		}
@@ -328,8 +337,8 @@ func (wp *workerPoolType) Start() error {
 // will still be executed. Close returns immediately. If you want to
 // wait until all workers are done executing their current jobs, use the
 // Wait method.
-func (wp *workerPoolType) Close() {
-	wp.exit <- true
+func (p *Pool) Close() {
+	p.exit <- true
 }
 
 // Wait will return when all workers are done executing their jobs.
@@ -337,12 +346,12 @@ func (wp *workerPoolType) Close() {
 // errors due to partially-executed jobs, any go program which starts a
 // worker pool should call Wait (and Close before that if needed) before
 // exiting.
-func (wp *workerPoolType) Wait() error {
+func (p *Pool) Wait() error {
 	// The shared waitgroup will only return after each worker is finished
-	wp.wg.Wait()
+	p.wg.Wait()
 	// Remove the pool id from the set of active pools, only after we know
 	// each worker finished executing.
-	if err := wp.removeFromPoolSet(); err != nil {
+	if err := p.removeFromPoolSet(); err != nil {
 		return err
 	}
 	return nil
@@ -351,19 +360,19 @@ func (wp *workerPoolType) Wait() error {
 // queryLoop continuously queries the database for new jobs and, if
 // it finds any, sends them through the jobs channel for execution
 // by some worker.
-func (wp *workerPoolType) queryLoop() error {
-	if err := wp.sendNextJobs(Config.Pool.BatchSize); err != nil {
+func (p *Pool) queryLoop() error {
+	if err := p.sendNextJobs(p.config.BatchSize); err != nil {
 		return err
 	}
 	for {
-		minWait := time.After(Config.Pool.MinWait)
+		minWait := time.After(p.config.MinWait)
 		select {
-		case <-wp.exit:
+		case <-p.exit:
 			// Close the channel to tell workers to stop executing new jobs
-			close(wp.jobs)
+			close(p.jobs)
 			return nil
 		case <-minWait:
-			if err := wp.sendNextJobs(Config.Pool.BatchSize); err != nil {
+			if err := p.sendNextJobs(p.config.BatchSize); err != nil {
 				return err
 			}
 		}
@@ -374,22 +383,25 @@ func (wp *workerPoolType) queryLoop() error {
 // sendNextJobs queries the database to find the next n ready jobs, then
 // sends those jobs to the jobs channel, effectively delegating them to
 // a worker.
-func (wp *workerPoolType) sendNextJobs(n int) error {
-	jobs, err := wp.getNextJobs(Config.Pool.BatchSize)
+func (p *Pool) sendNextJobs(n int) error {
+	jobs, err := p.getNextJobs(p.config.BatchSize)
 	if err != nil {
 		return err
 	}
 	// Send the jobs across the channel, where they will be picked up
 	// by exactly one worker
 	for _, job := range jobs {
-		wp.jobs <- job
+		p.jobs <- job
 	}
 	return nil
 }
 
 // getNextJobs queries the database and returns the next n ready jobs.
-func (wp *workerPoolType) getNextJobs(n int) ([]*Job, error) {
-	return getNextJobs(n, wp.id)
+func (p *Pool) getNextJobs(n int) ([]*Job, error) {
+	p.RLock()
+	thisId := p.id
+	p.RUnlock()
+	return getNextJobs(n, thisId)
 }
 
 // getNextJobs queries the database and returns the next n ready jobs.

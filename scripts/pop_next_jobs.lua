@@ -61,11 +61,11 @@ local allJobs = {}
 if #jobIds > 0 then
 	-- Add job ids to the executing set
 	redis.call('ZUNIONSTORE', '{{.executingSet}}', 2, '{{.executingSet}}', '{{.jobsTempSet}}')
-	-- Remove job ids from the queued set
-	redis.call('ZREMRANGEBYRANK', '{{.queuedSet}}', -(#jobIds), -1)
 	-- Now we are ready to construct our response.
 	for i, jobId in ipairs(jobIds) do
 		local jobKey = 'jobs:' .. jobId
+		-- Remove the job from the queued set
+		redis.call('ZREM', '{{.queuedSet}}', jobId)
 		-- Set the poolId field for the job
 		redis.call('HSET', jobKey, 'poolId', poolId)
 		-- Set the job status to executing

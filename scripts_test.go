@@ -21,7 +21,7 @@ func TestPopNextJobsScript(t *testing.T) {
 	// Set up the database
 	tx0 := newTransaction()
 	// One set will mimic the ready and sorted jobs
-	tx0.command("ZADD", redis.Args{keys.jobsTimeIndex, pastTime, "three", pastTime, "four"}, nil)
+	tx0.command("ZADD", redis.Args{keys.jobsTimeIndex, pastTime, "two", pastTime, "four"}, nil)
 	// One set will mimic the queued set
 	tx0.command("ZADD", redis.Args{StatusQueued.key(), 1, "one", 2, "two", 3, "three", 4, "four"}, nil)
 	// One set will mimic the executing set
@@ -45,13 +45,13 @@ func TestPopNextJobsScript(t *testing.T) {
 	}
 
 	// Check the results
-	expectedIds := []string{"four", "three"}
+	expectedIds := []string{"four", "two"}
 	if !reflect.DeepEqual(expectedIds, gotIds) {
 		t.Errorf("Ids returned by script were incorrect.\n\tExpected: %v\n\tBut got:  %v", expectedIds, gotIds)
 	}
 	conn := redisPool.Get()
 	defer conn.Close()
-	expectedExecuting := []string{"five", "four", "three"}
+	expectedExecuting := []string{"five", "four", "two"}
 	gotExecuting, err := redis.Strings(conn.Do("ZREVRANGE", StatusExecuting.key(), 0, -1))
 	if err != nil {
 		t.Errorf("Unexpected error in ZREVRANGE: %s", err.Error())
@@ -59,7 +59,7 @@ func TestPopNextJobsScript(t *testing.T) {
 	if !reflect.DeepEqual(expectedExecuting, gotExecuting) {
 		t.Errorf("Ids in the executing set were incorrect.\n\tExpected: %v\n\tBut got:  %v", expectedExecuting, gotExecuting)
 	}
-	expectedQueued := []string{"two", "one"}
+	expectedQueued := []string{"three", "one"}
 	gotQueued, err := redis.Strings(conn.Do("ZREVRANGE", StatusQueued.key(), 0, -1))
 	if err != nil {
 		t.Errorf("Unexpected error in ZREVRANGE: %s", err.Error())

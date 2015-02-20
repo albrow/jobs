@@ -144,13 +144,13 @@ func (wp *workerPoolType) removeFromPoolSet() error {
 
 // pingKey is the key for a pub/sub connection which allows a pool to ping, i.e.
 // check the status of, another pool.
-func (wp *workerPoolType) pingKey() error {
+func (wp *workerPoolType) pingKey() string {
 	return "workers:" + wp.id + ":ping"
 }
 
 // pongKey is the key for a pub/sub connection which allows a pool to respond to
 // pings with a pong, i.e. acknowledge that it is still alive and working.
-func (wp *workerPoolType) pongKey() error {
+func (wp *workerPoolType) pongKey() string {
 	return "workers:" + wp.id + ":pong"
 }
 
@@ -188,12 +188,8 @@ func (wp *workerPoolType) Start() error {
 // will still be executed. Close returns immediately. If you want to
 // wait until all workers are done executing their current jobs, use the
 // Wait method.
-func (wp *workerPoolType) Close() error {
+func (wp *workerPoolType) Close() {
 	wp.exit <- true
-	if err := wp.removeFromPoolSet(); err != nil {
-		return err
-	}
-	return nil
 }
 
 // Wait will return when all workers are done executing their jobs.
@@ -201,9 +197,15 @@ func (wp *workerPoolType) Close() error {
 // errors due to partially-executed jobs, any go program which starts a
 // worker pool should call Wait (and Close before that if needed) before
 // exiting.
-func (wp *workerPoolType) Wait() {
+func (wp *workerPoolType) Wait() error {
 	// The shared waitgroup will only return after each worker is finished
 	wp.wg.Wait()
+	// Remove the pool id from the set of active pools, only after we know
+	// each worker finished executing.
+	if err := wp.removeFromPoolSet(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // queryLoop continuously queries the database for new jobs and, if

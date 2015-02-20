@@ -26,8 +26,9 @@ func TestPoolIdSet(t *testing.T) {
 		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
 	}
 	expectSetContains(t, keys.activePools, Pool.id)
-	if err := Pool.Close(); err != nil {
-		t.Errorf("Unexpected error in pool.Close(): %s", err.Error())
+	Pool.Close()
+	if err := Pool.Wait(); err != nil {
+		t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
 	}
 	expectSetDoesNotContain(t, keys.activePools, Pool.id)
 }
@@ -98,7 +99,9 @@ func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 	defer func() {
 		// Close the pool and wait for workers to finish
 		Pool.Close()
-		Pool.Wait()
+		if err := Pool.Wait(); err != nil {
+			t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+		}
 	}()
 
 	// Register some jobs which will set the value of some string index,
@@ -182,7 +185,9 @@ func TestExecuteJobWithNoArguments(t *testing.T) {
 
 	// Immediately close the pool and wait for workers to finish
 	Pool.Close()
-	Pool.Wait()
+	if err := Pool.Wait(); err != nil {
+		t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+	}
 
 	// Make sure that data was set to "ok", indicating that the job executed
 	// successfully.
@@ -226,12 +231,12 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 	Pool.Start()
 
 	// Immediately stop the pool to stop the workers from doing more jobs
-	if err := Pool.Close(); err != nil {
-		t.Errorf("Unexpected error in Pool.Close(): %s", err.Error())
-	}
+	Pool.Close()
 
 	// Wait for the workers to finish
-	Pool.Wait()
+	if err := Pool.Wait(); err != nil {
+		t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+	}
 
 	// Check that the first 4 values of data were set to "ok"
 	// This would mean that the first 4 jobs (in order of priority)
@@ -297,7 +302,9 @@ func TestJobsOnlyExecutedOnce(t *testing.T) {
 	// Close the pool, allowing for a max of one more iteration
 	Pool.Close()
 	// Wait for the workers to finish
-	Pool.Wait()
+	if err := Pool.Wait(); err != nil {
+		t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+	}
 
 	// Check that each value in data equals 1.
 	// This would mean that each job was only executed once
@@ -320,7 +327,9 @@ func TestAllJobsExecuted(t *testing.T) {
 	defer func() {
 		// Close the pool and wait for workers to finish
 		Pool.Close()
-		Pool.Wait()
+		if err := Pool.Wait(); err != nil {
+			t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+		}
 	}()
 
 	// Register some jobs which will simply set one of the elements in
@@ -384,7 +393,9 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 	defer func() {
 		// Close the pool and wait for workers to finish
 		Pool.Close()
-		Pool.Wait()
+		if err := Pool.Wait(); err != nil {
+			t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+		}
 	}()
 
 	// Register some jobs which will set one of the elements in data
@@ -478,7 +489,9 @@ func TestJobTimestamps(t *testing.T) {
 
 	// Immediately stop the pool and wait for workers to finish
 	Pool.Close()
-	Pool.Wait()
+	if err := Pool.Wait(); err != nil {
+		t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+	}
 	poolClosed := time.Now()
 
 	// Update our copy of the job
@@ -504,7 +517,9 @@ func TestRecurringJob(t *testing.T) {
 	defer func() {
 		// Close the pool and wait for workers to finish
 		Pool.Close()
-		Pool.Wait()
+		if err := Pool.Wait(); err != nil {
+			t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+		}
 	}()
 
 	// Register a job type which will simply send through to a channel
@@ -600,7 +615,9 @@ func TestJobFail(t *testing.T) {
 
 	// Immediately stop the pool and wait for workers to finish
 	Pool.Close()
-	Pool.Wait()
+	if err := Pool.Wait(); err != nil {
+		t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+	}
 
 	// Update our copy of the job
 	if err := job.Refresh(); err != nil {
@@ -622,7 +639,9 @@ func TestRetryJob(t *testing.T) {
 	defer func() {
 		// Close the pool and wait for workers to finish
 		Pool.Close()
-		Pool.Wait()
+		if err := Pool.Wait(); err != nil {
+			t.Errorf("Unexpected error in Pool.Wait(): %s", err.Error())
+		}
 	}()
 
 	// Register a job type which will increment a counter with the number of tries

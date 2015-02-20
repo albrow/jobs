@@ -86,10 +86,10 @@
 //
 //  func main() {
 //	     defer func() {
-//	         if err := zazu.Pool.Close(); err != nil {
+//	         zazu.Pool.Close()
+//          if err := zazu.Pool.Wait(); err != nil {
 //              // Handle err
 //          }
-//	         zazu.Pool.Wait()
 //      }
 //  }
 //

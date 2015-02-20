@@ -1,8 +1,9 @@
-# Jobs
+Jobs
+====
 
 A persistent and flexible background jobs library for go.
 
-[![GoDoc](https://godoc.org/github.com/albrow/Jobs?status.svg)](https://godoc.org/github.com/albrow/Jobs)
+[![GoDoc](https://godoc.org/github.com/albrow/jobs?status.svg)](https://godoc.org/github.com/albrow/jobs)
 
 Supports the following features:
 
@@ -19,29 +20,34 @@ Supports the following features:
    currently executing or how long a particular job took to execute.
  - Any job that permanently fails will have its error captured and stored.
 
-### Why is it Useful
 
-Jobs is intended to be used in web applications written in go. It is useful for
-cases where you need to execute some long-running code, but you don't want your users
-to wait for the code to execute before rendering a response. A good example is sending
-a welcome email to your users after they sign up. You can use Jobs to schedule the email
-to be sent asynchronously, and render a response to your user without waiting for the email
-to be sent. You could use a goroutine to accomplish the same thing, but in the event of
-a server restart or power loss, the email might never be sent. Jobs guarantees that the
-email will be sent at some time, and allows you to spread the work between different
-machines.
+Why is it Useful?
+-----------------
+
+Jobs is intended to be used in web applications. It is useful for cases where you need
+to execute some long-running code, but you don't want your users to wait for the code to
+execute before rendering a response. A good example is sending a welcome email to your users
+after they sign up. You can use Jobs to schedule the email to be sent asynchronously, and
+render a response to your user without waiting for the email to be sent. You could use a
+goroutine to accomplish the same thing, but in the event of a server restart or power loss,
+the email might never be sent. Jobs guarantees that the email will be sent at some time,
+and allows you to spread the work between different machines.
+
+
+Quickstart Guide
+----------------
 
 ### Registering Job Types
 
-Jobs in Jobs must be organized into discrete types. Here's an example of
-how to register a job which sends a welcome email to users:
+Jobs must be organized into discrete types. Here's an example of how to register a job
+which sends a welcome email to users:
 
 ``` go
 // We'll specify that we want the job to be retried 3 times before finally failing
-welcomeEmailJobs, err := Jobs.RegisterJobType("welcomeEmail", 3, func(user *User) {
+welcomeEmailJobs, err := jobs.RegisterJobType("welcomeEmail", 3, func(user *User) {
 	msg := fmt.Sprintf("Hello, %s! Thanks for signing up for foo.com.", user.Name)
 	if err := emails.Send(user.EmailAddress, msg); err != nil {
-		// Panics will be captured by a Jobs worker, triggering a retry
+		// Panics will be captured by a worker, triggering up to 3 retries
 		panic(err)
 	}
 })
@@ -61,49 +67,61 @@ if err != nil {
 }
 ```
 
-You can use the Job object returned by Schedule or ScheduleRecurring to check on the status of
-the job or cancel it manually.
+You can use the [Job object](http://godoc.org/github.com/albrow/jobs#Job) returned by Schedule
+or ScheduleRecurring to check on the status of the job or cancel it manually.
 
 ### Starting and Configuring Worker Pools
 
 You can schedule any number of worker pools accross any number of machines, provided every machine
-agrees on the definition of some number of job types. For each pool, you can specify the number of
-workers and some other parameters. You are only allowed one pool per machine, and Jobs gives you a
-single exported Pool object to enforce this.
+agrees on the definition of the job types. If you want, you can start a worker pool on the same
+machines that are scheduling jobs, or you can have each worker pool running on a designated machine.
+It is technically safe to start multiple pools on a single machine, but typically you should only start
+one pool per machine.
 
-Configure a pool, use Jobs.Config.Pool like so:
-
-``` go
-Jobs.Config.Pool.NumWorkers = 8
-Jobs.Config.Pool.MinWait = 10 * time.Millisecond
-```
-
-You can start the pool by calling the Start method.
+To create a new pool with the [default configuration](http://godoc.org/github.com/albrow/jobs#pkg-variables),
+just pass in nil:
 
 ``` go
-if err := Jobs.Pool.Start(); err != nil {
-	// Handle err
-}
+pool := jobs.NewPool(nil)
 ```
 
-Once started the Pool will continue to query the database for new jobs and delegate those jobs to
-some number of concurrent workers. To stop the Pool manually, you can use Pool.Close(). Then you can
-use Pool.Wait() to wait for all workers to finish their current jobs (if any).
+You can also specify a different configuration by passing in
+[*PoolConfig](http://godoc.org/github.com/albrow/jobs#PoolConfig). Any zero values in the config you pass
+in will fallback to the default values. So here's how you could start a pool with 10 workers and a batch
+size of 10, while letting the other options remain the default.
 
-Any go program that calls Pool.Start() should also wait for the workers to finish before exiting. You
-can do so by wrapping Close and Wait in a defer statement like so:
+``` go
+pool := jobs.NewPool(&jobs.PoolConfig{
+	NumWorkers: 10,
+	BatchSize: 10,
+})
+```
+
+After you have created a pool, you can start it with the Start method. Once started, the pool will
+continuously query the database for new jobs and delegate those jobs to workers. Any program that calls
+Pool.Start() should also wait for the workers to finish before exiting. You can do so by wrapping Close and
+Wait in a defer statement. Typical usage looks something like this:
 
 ``` go
 func main() {
+	pool := jobs.NewPool(nil)
 	defer func() {
-		Jobs.Pool.Close()
-		if err := Jobs.Pool.Wait(); err != nil {
+		pool.Close()
+		if err := pool.Wait(); err != nil {
 			// Handle err
 		}
+	}
+	if err := pool.Start(); err != nil {
+		// Handle err
 	}
 }
 ```
 
-### License
+You can also call Close and Wait at any time to manually stop the pool from executing new jobs. In this
+case, any jobs that are currently being executed will still finish.
+
+
+License
+-------
 
 Jobs is licensed under the MIT License. See the LICENSE file for more information.

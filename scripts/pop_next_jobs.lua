@@ -2,7 +2,7 @@
 -- Use of this source code is governed by the MIT
 -- license, which can be found in the LICENSE file.
 
--- pop_next_jobs represents a lua script that takes the following arguments:
+-- pop_next_jobs is a lua script that takes the following arguments:
 -- 	1) The maximum number of jobs to pop and return
 -- 	2) The current unix time UTC with nanosecond precision
 -- The script gets the next available jobs from the queued set which are

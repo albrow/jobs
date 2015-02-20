@@ -184,3 +184,68 @@ func TestDestroyJobScript(t *testing.T) {
 	job.status = StatusDestroyed
 	expectJobStatusEquals(t, job, StatusDestroyed)
 }
+
+func TestPurgeStalePoolScript(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	testJobType, err := RegisterJobType("testJobType", 0, func() {})
+	if err != nil {
+		t.Errorf("Unexpected error in RegisterJobType(): %s", err.Error())
+	}
+
+	// Set up the database. We'll put some jobs in the executing set with a stale poolId,
+	// and some jobs with an active poolId.
+	staleJobs := []*Job{}
+	stalePoolId := "stalePool"
+	for i := 0; i < 4; i++ {
+		job := &Job{typ: testJobType, status: StatusExecuting, poolId: stalePoolId}
+		if err := job.save(); err != nil {
+			t.Errorf("Unexpected error in job.save(): %s", err.Error())
+		}
+		staleJobs = append(staleJobs, job)
+	}
+	activeJobs := []*Job{}
+	activePoolId := "activePool"
+	for i := 0; i < 4; i++ {
+		job := &Job{typ: testJobType, status: StatusExecuting, poolId: activePoolId}
+		if err := job.save(); err != nil {
+			t.Errorf("Unexpected error in job.save(): %s", err.Error())
+		}
+		activeJobs = append(activeJobs, job)
+	}
+
+	// Add both pools to the set of active pools
+	conn := redisPool.Get()
+	defer conn.Close()
+	if _, err := conn.Do("SADD", keys.activePools, stalePoolId, activePoolId); err != nil {
+		t.Errorf("Unexpected error adding pools to set: %s", err)
+	}
+
+	// Execute the script to purge the stale pool
+	tx := newTransaction()
+	tx.purgeStalePool(stalePoolId)
+	if err := tx.exec(); err != nil {
+		t.Error("Unexpected err in tx.exec(): %s", err.Error())
+	}
+
+	// Check the result
+	// The active pools set should contain only the activePoolId
+	expectSetDoesNotContain(t, keys.activePools, stalePoolId)
+	expectSetContains(t, keys.activePools, activePoolId)
+	// All the active jobs should still be executing
+	for _, job := range activeJobs {
+		if err := job.Refresh(); err != nil {
+			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
+		}
+		expectJobStatusEquals(t, job, StatusExecuting)
+	}
+	// All the stale jobs should now be queued and have an empty poolId
+	for _, job := range staleJobs {
+		if err := job.Refresh(); err != nil {
+			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
+		}
+		expectJobStatusEquals(t, job, StatusQueued)
+		expectJobFieldEquals(t, job, "poolId", "", stringConverter)
+	}
+}

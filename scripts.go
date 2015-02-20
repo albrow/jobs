@@ -34,6 +34,7 @@ var (
 		"destroyedSet":    StatusDestroyed.key(),
 		"timeIndexSet":    keys.jobsTimeIndex,
 		"jobsTempSet":     keys.jobsTemp,
+		"activePoolsSet":  keys.activePools,
 	}
 )
 
@@ -42,6 +43,7 @@ var (
 	retryOrFailJobScript *redis.Script
 	setJobStatusScript   *redis.Script
 	destroyJobScript     *redis.Script
+	purgeStalePoolScript *redis.Script
 )
 
 var (
@@ -73,6 +75,11 @@ func init() {
 		{
 			script:   &destroyJobScript,
 			filename: "destroy_job.lua",
+			keyCount: 0,
+		},
+		{
+			script:   &purgeStalePoolScript,
+			filename: "purge_stale_pool.lua",
 			keyCount: 0,
 		},
 	}
@@ -122,4 +129,12 @@ func (t *transaction) setJobStatus(job *Job, status JobStatus) {
 // The script will remove all records associated with job from the database.
 func (t *transaction) destroyJob(job *Job) {
 	t.script(destroyJobScript, redis.Args{job.id}, nil)
+}
+
+// purgeStalePool is a small function wrapper around purgeStalePoolScript.
+// It offers some type safety and helps make sure the arguments you pass through to the are correct.
+// The script will remove the stale pool from the active pools set, and then requeue any jobs associated
+// with the stale pool that are stuck in the executing set.
+func (t *transaction) purgeStalePool(poolId string) {
+	t.script(purgeStalePoolScript, redis.Args{poolId}, nil)
 }

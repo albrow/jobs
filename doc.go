@@ -4,7 +4,7 @@
 
 // package jobs is a persistent and flexible background jobs library.
 //
-// Version: 0.0.1
+// Version: X.X.X
 //
 // Jobs supports the following features:
 //

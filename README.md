@@ -5,7 +5,7 @@ A persistent and flexible background jobs library for go.
 
 [![GoDoc](https://godoc.org/github.com/albrow/jobs?status.svg)](https://godoc.org/github.com/albrow/jobs)
 
-Version: 0.0.1
+Version: X.X.X
 
 Supports the following features:
 

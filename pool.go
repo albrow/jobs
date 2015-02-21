@@ -338,7 +338,7 @@ func (p *Pool) Start() error {
 // wait until all workers are done executing their current jobs, use the
 // Wait method.
 func (p *Pool) Close() {
-	p.exit <- true
+	close(p.exit)
 }
 
 // Wait will return when all workers are done executing their jobs.

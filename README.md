@@ -46,7 +46,7 @@ which sends a welcome email to users:
 
 ``` go
 // We'll specify that we want the job to be retried 3 times before finally failing
-welcomeEmailJobs, err := jobs.RegisterJobType("welcomeEmail", 3, func(user *User) {
+welcomeEmailJobs, err := jobs.RegisterType("welcomeEmail", 3, func(user *User) {
 	msg := fmt.Sprintf("Hello, %s! Thanks for signing up for foo.com.", user.Name)
 	if err := emails.Send(user.EmailAddress, msg); err != nil {
 		// Panics will be captured by a worker, triggering up to 3 retries

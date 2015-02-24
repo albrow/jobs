@@ -74,7 +74,7 @@ func TestRetryOrFailJobScript(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
-	testJob, err := RegisterJobType("testJob", 0, func() {})
+	testJob, err := RegisterType("testJob", 0, func() {})
 	if err != nil {
 		t.Errorf("Unexpected error registering job type: %s", err.Error())
 	}
@@ -189,9 +189,9 @@ func TestPurgeStalePoolScript(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
-	testJobType, err := RegisterJobType("testJobType", 0, func() {})
+	testType, err := RegisterType("testType", 0, func() {})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType(): %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType(): %s", err.Error())
 	}
 
 	// Set up the database. We'll put some jobs in the executing set with a stale poolId,
@@ -199,7 +199,7 @@ func TestPurgeStalePoolScript(t *testing.T) {
 	staleJobs := []*Job{}
 	stalePoolId := "stalePool"
 	for i := 0; i < 4; i++ {
-		job := &Job{typ: testJobType, status: StatusExecuting, poolId: stalePoolId}
+		job := &Job{typ: testType, status: StatusExecuting, poolId: stalePoolId}
 		if err := job.save(); err != nil {
 			t.Errorf("Unexpected error in job.save(): %s", err.Error())
 		}
@@ -208,7 +208,7 @@ func TestPurgeStalePoolScript(t *testing.T) {
 	activeJobs := []*Job{}
 	activePoolId := "activePool"
 	for i := 0; i < 4; i++ {
-		job := &Job{typ: testJobType, status: StatusExecuting, poolId: activePoolId}
+		job := &Job{typ: testType, status: StatusExecuting, poolId: activePoolId}
 		if err := job.save(); err != nil {
 			t.Errorf("Unexpected error in job.save(): %s", err.Error())
 		}

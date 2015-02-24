@@ -28,7 +28,7 @@ func testingSetUp() {
 		Config.Db.Network = "unix"
 	})
 	// Clear out any old job types
-	jobTypes = map[string]*JobType{}
+	Types = map[string]*Type{}
 }
 
 // testingSetUp should be called at the end of any test that touches the database
@@ -48,9 +48,9 @@ func flushdb() {
 
 // createTestJob creates and returns a job that can be used for testing.
 func createTestJob() (*Job, error) {
-	// Register the "testJobType"
-	jobTypeName := "testJobType"
-	jobType, err := RegisterJobType(jobTypeName, 0, func() {})
+	// Register the "testType"
+	TypeName := "testType"
+	Type, err := RegisterType(TypeName, 0, func() {})
 	if err != nil {
 		if _, ok := err.(ErrorNameAlreadyRegistered); !ok {
 			// If the name was already registered, that's fine.
@@ -62,7 +62,7 @@ func createTestJob() (*Job, error) {
 	j := &Job{
 		id:       "testJob",
 		data:     []byte("testData"),
-		typ:      jobType,
+		typ:      Type,
 		time:     time.Now().UTC().UnixNano(),
 		priority: 100,
 	}
@@ -73,9 +73,9 @@ func createTestJob() (*Job, error) {
 // Each job has a unique id and priority, and the jobs are returned in order
 // of decreasing priority.
 func createTestJobs(n int) ([]*Job, error) {
-	// Register the "testJobType"
-	jobTypeName := "testJobType"
-	jobType, err := RegisterJobType(jobTypeName, 0, func() {})
+	// Register the "testType"
+	TypeName := "testType"
+	Type, err := RegisterType(TypeName, 0, func() {})
 	if err != nil {
 		if _, ok := err.(ErrorNameAlreadyRegistered); !ok {
 			// If the name was already registered, that's fine.
@@ -88,7 +88,7 @@ func createTestJobs(n int) ([]*Job, error) {
 		jobs[i] = &Job{
 			id:       fmt.Sprintf("testJob%d", i),
 			data:     []byte("testData"),
-			typ:      jobType,
+			typ:      Type,
 			time:     time.Now().UTC().UnixNano(),
 			priority: (n - i) + 1,
 		}

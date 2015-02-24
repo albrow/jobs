@@ -14,7 +14,7 @@ import (
 type Job struct {
 	id       string
 	data     []byte
-	typ      *JobType
+	typ      *Type
 	status   Status
 	time     int64
 	freq     int64
@@ -260,11 +260,11 @@ func scanJob(reply interface{}, job *Job) error {
 			if err := scanString(fieldValue, &typeName); err != nil {
 				return err
 			}
-			jobType, found := jobTypes[typeName]
+			Type, found := Types[typeName]
 			if !found {
-				return fmt.Errorf("jobs: In scanJob: Could not find JobType with name = %s", typeName)
+				return fmt.Errorf("jobs: In scanJob: Could not find Type with name = %s", typeName)
 			}
-			job.typ = jobType
+			job.typ = Type
 		case "time":
 			if err := scanInt64(fieldValue, &(job.time)); err != nil {
 				return err

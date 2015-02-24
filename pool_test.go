@@ -118,7 +118,7 @@ func TestStatusIsExecutingWhileExecuting(t *testing.T) {
 	// jobsCanExit signals all jobs to exit when closed
 	jobsCanExit := make(chan bool)
 	data := make([]string, 4)
-	setStringJob, err := RegisterJobType("setString", 0, func(i int) {
+	setStringJob, err := RegisterType("setString", 0, func(i int) {
 		data[i] = "ok"
 		waitForJobs.Done()
 		// Wait for the signal before returning from this function
@@ -126,7 +126,7 @@ func TestStatusIsExecutingWhileExecuting(t *testing.T) {
 		}
 	})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType: %s", err.Error())
 	}
 
 	// Queue up some jobs
@@ -169,11 +169,11 @@ func TestExecuteJobWithNoArguments(t *testing.T) {
 
 	// Register a job type with a handler that expects 0 arguments
 	data := ""
-	setOkayJob, err := RegisterJobType("setOkay", 0, func() {
+	setOkayJob, err := RegisterType("setOkay", 0, func() {
 		data = "ok"
 	})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType: %s", err.Error())
 	}
 
 	// Queue up a single job
@@ -213,11 +213,11 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 
 	// Register some jobs which will simply set one of the values in data
 	data := make([]string, 8)
-	setStringJob, err := RegisterJobType("setString", 0, func(i int) {
+	setStringJob, err := RegisterType("setString", 0, func(i int) {
 		data[i] = "ok"
 	})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType: %s", err.Error())
 	}
 
 	// Queue up some jobs
@@ -285,12 +285,12 @@ func TestJobsOnlyExecutedOnce(t *testing.T) {
 	// Register some jobs which will simply increment one of the values in data
 	data := make([]int, 4)
 	waitForJobs := sync.WaitGroup{}
-	incrementJob, err := RegisterJobType("increment", 0, func(i int) {
+	incrementJob, err := RegisterType("increment", 0, func(i int) {
 		data[i] += 1
 		waitForJobs.Done()
 	})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType: %s", err.Error())
 	}
 
 	// Queue up some jobs
@@ -355,13 +355,13 @@ func TestAllJobsExecuted(t *testing.T) {
 	// data to "ok"
 	dataMut := sync.Mutex{}
 	data := make([]string, 100)
-	setStringJob, err := RegisterJobType("setString", 0, func(i int) {
+	setStringJob, err := RegisterType("setString", 0, func(i int) {
 		dataMut.Lock()
 		data[i] = "ok"
 		dataMut.Unlock()
 	})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType: %s", err.Error())
 	}
 
 	// Queue up some jobs
@@ -431,13 +431,13 @@ func TestJobsAreNotExecutedUntilTime(t *testing.T) {
 	// use a waitgroup.
 	data := make([]string, 4)
 	dataMut := sync.Mutex{}
-	setStringJob, err := RegisterJobType("setString", 0, func(i int) {
+	setStringJob, err := RegisterType("setString", 0, func(i int) {
 		dataMut.Lock()
 		data[i] = "ok"
 		dataMut.Unlock()
 	})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType: %s", err.Error())
 	}
 
 	// Queue up some jobs with a time parameter in the future
@@ -498,11 +498,11 @@ func TestJobTimestamps(t *testing.T) {
 	defer testingTeardown()
 
 	// Register a job type which will do nothing but sleep for some duration
-	sleepJob, err := RegisterJobType("sleep", 0, func(d time.Duration) {
+	sleepJob, err := RegisterType("sleep", 0, func(d time.Duration) {
 		time.Sleep(d)
 	})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType: %s", err.Error())
 	}
 
 	// Queue up a single job
@@ -565,11 +565,11 @@ func TestRecurringJob(t *testing.T) {
 
 	// Register a job type which will simply send through to a channel
 	jobFinished := make(chan bool)
-	signalJob, err := RegisterJobType("signalJob", 0, func() {
+	signalJob, err := RegisterType("signalJob", 0, func() {
 		jobFinished <- true
 	})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType: %s", err.Error())
 	}
 
 	// Schedule a recurring signalJob
@@ -632,11 +632,11 @@ func TestJobFail(t *testing.T) {
 	defer testingTeardown()
 
 	// Register a job type which will do nothing but sleep for some duration
-	failJob, err := RegisterJobType("failJob", 0, func(msg string) {
+	failJob, err := RegisterType("failJob", 0, func(msg string) {
 		panic(errors.New(msg))
 	})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType: %s", err.Error())
 	}
 
 	// Queue up a single job
@@ -698,7 +698,7 @@ func TestRetryJob(t *testing.T) {
 	retries := uint(5)
 	expectedTries := retries + 1
 	jobFailed := make(chan bool)
-	countTriesJob, err := RegisterJobType("countTriesJob", retries, func() {
+	countTriesJob, err := RegisterType("countTriesJob", retries, func() {
 		triesMut.Lock()
 		tries += 1
 		done := tries == expectedTries
@@ -710,7 +710,7 @@ func TestRetryJob(t *testing.T) {
 		panic(msg)
 	})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType: %s", err.Error())
 	}
 
 	// Queue up a single job
@@ -792,13 +792,13 @@ func TestStalePoolsArePurged(t *testing.T) {
 	// Register a job type which will signal and then wait for a channel to close
 	// before finishing
 	jobStarted := make(chan bool)
-	signalAndWaitJob, err := RegisterJobType("signalAndWaitJob", 0, func() {
+	signalAndWaitJob, err := RegisterType("signalAndWaitJob", 0, func() {
 		jobStarted <- true
 		for range jobsCanFinish {
 		}
 	})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType: %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType: %s", err.Error())
 	}
 
 	// Queue up a job

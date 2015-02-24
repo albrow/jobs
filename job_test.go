@@ -258,26 +258,3 @@ func TestScanJob(t *testing.T) {
 		t.Errorf("Result of scanJob was incorrect.\n\tExpected %+v\n\tbut got  %+v", job, jobCopy)
 	}
 }
-
-func TestJobStatusCount(t *testing.T) {
-	testingSetUp()
-	defer testingTeardown()
-	job, err := createAndSaveTestJob()
-	if err != nil {
-		t.Errorf("Unexpected error: %s")
-	}
-	for _, status := range possibleStatuses {
-		if status == StatusDestroyed {
-			// Skip this one, since destroying a job means erasing all records from the database
-			continue
-		}
-		job.setStatus(status)
-		count, err := status.Count()
-		if err != nil {
-			t.Errorf("Unexpected error in status.Count(): %s", err.Error())
-		}
-		if count != 1 {
-			t.Errorf("Expected %s.Count() to return 1 after setting job status to %s, but got %d", status, status, count)
-		}
-	}
-}

@@ -69,8 +69,36 @@ func createTestJob() (*Job, error) {
 	return j, nil
 }
 
+// createTestJobs creates and returns n jobs that can be used for testing.
+// Each job has a unique id and priority, and the jobs are returned in order
+// of decreasing priority.
+func createTestJobs(n int) ([]*Job, error) {
+	// Register the "testJobType"
+	jobTypeName := "testJobType"
+	jobType, err := RegisterJobType(jobTypeName, 0, func() {})
+	if err != nil {
+		if _, ok := err.(ErrorNameAlreadyRegistered); !ok {
+			// If the name was already registered, that's fine.
+			// We should return any other type of error
+			return nil, err
+		}
+	}
+	jobs := make([]*Job, n)
+	for i := 0; i < n; i++ {
+		jobs[i] = &Job{
+			id:       fmt.Sprintf("testJob%d", i),
+			data:     []byte("testData"),
+			typ:      jobType,
+			time:     time.Now().UTC().UnixNano(),
+			priority: (n - i) + 1,
+		}
+	}
+	return jobs, nil
+}
+
 // createAndSaveTestJob creates, saves, and returns a job which can be used
-// for testing.
+// for testing. Each job has a unique id and priority, and the jobs are
+// returned in order of decreasing priority.
 func createAndSaveTestJob() (*Job, error) {
 	j, err := createTestJob()
 	if err != nil {
@@ -80,6 +108,24 @@ func createAndSaveTestJob() (*Job, error) {
 		return nil, fmt.Errorf("Unexpected error in j.save(): %s", err.Error())
 	}
 	return j, nil
+}
+
+// createAndSaveTestJobs creates, saves, and returns n jobs which can be used
+// for testing.
+func createAndSaveTestJobs(n int) ([]*Job, error) {
+	jobs, err := createTestJobs(n)
+	if err != nil {
+		return nil, err
+	}
+	// Save all the jobs in a single transaction
+	t := newTransaction()
+	for _, job := range jobs {
+		t.saveJob(job)
+	}
+	if err := t.exec(); err != nil {
+		return nil, err
+	}
+	return jobs, nil
 }
 
 // expectJobFieldEquals sets an error via t.Errorf if the the field identified by fieldName does

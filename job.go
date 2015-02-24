@@ -423,3 +423,15 @@ func (t *transaction) scanJobById(id string, job *Job) {
 	job.id = id
 	t.command("HGETALL", redis.Args{job.key()}, newScanJobHandler(job))
 }
+
+// FindById returns the job with the given id or an error if the job cannot be found
+// or there was a problem connecting to the database.
+func FindById(id string) (*Job, error) {
+	job := &Job{}
+	t := newTransaction()
+	t.scanJobById(id, job)
+	if err := t.exec(); err != nil {
+		return nil, err
+	}
+	return job, nil
+}

@@ -40,7 +40,7 @@ func TestJobSave(t *testing.T) {
 	expectJobFieldEquals(t, job, "poolId", job.poolId, stringConverter)
 
 	// Make sure the job status was correct
-	expectJobStatusEquals(t, job, StatusSaved)
+	expectStatusEquals(t, job, StatusSaved)
 
 	// Make sure the job was indexed by its time correctly
 	expectJobInTimeIndex(t, job)
@@ -199,7 +199,7 @@ func TestJobSetError(t *testing.T) {
 // to be after the last step.
 type statePath struct {
 	steps    []func(*Job) error
-	expected JobStatus
+	expected Status
 }
 
 var (
@@ -233,7 +233,7 @@ func testJobStatePaths(t *testing.T, statePaths []statePath) {
 				t.Errorf("Unexpected error in step %v: %s", step, err)
 			}
 		}
-		expectJobStatusEquals(t, job, statePath.expected)
+		expectStatusEquals(t, job, statePath.expected)
 	}
 }
 

@@ -41,7 +41,7 @@ var (
 var (
 	popNextJobsScript    *redis.Script
 	retryOrFailJobScript *redis.Script
-	setJobStatusScript   *redis.Script
+	setStatusScript      *redis.Script
 	destroyJobScript     *redis.Script
 	purgeStalePoolScript *redis.Script
 )
@@ -68,7 +68,7 @@ func init() {
 			keyCount: 0,
 		},
 		{
-			script:   &setJobStatusScript,
+			script:   &setStatusScript,
 			filename: "set_job_status.lua",
 			keyCount: 0,
 		},
@@ -116,12 +116,12 @@ func (t *transaction) retryOrFailJob(job *Job, handler replyHandler) {
 	t.script(retryOrFailJobScript, redis.Args{job.id}, handler)
 }
 
-// setJobStatus is a small function wrapper around setJobStatusScript.
+// setStatus is a small function wrapper around setStatusScript.
 // It offers some type safety and helps make sure the arguments you pass through to the are correct.
 // The script will atomically update the status of the job, removing it from its old status set and
 // adding it to the new one.
-func (t *transaction) setJobStatus(job *Job, status JobStatus) {
-	t.script(setJobStatusScript, redis.Args{job.id, string(status)}, nil)
+func (t *transaction) setStatus(job *Job, status Status) {
+	t.script(setStatusScript, redis.Args{job.id, string(status)}, nil)
 }
 
 // destroyJob is a small function wrapper around destroyJobScript.

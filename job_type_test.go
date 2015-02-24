@@ -85,7 +85,7 @@ func TestJobTypeSchedule(t *testing.T) {
 	expectJobFieldEquals(t, job, "priority", testJobPriority, intConverter)
 	expectJobFieldEquals(t, job, "time", encodedTime, int64Converter)
 	expectJobFieldEquals(t, job, "data", encodedData, bytesConverter)
-	expectJobStatusEquals(t, job, StatusQueued)
+	expectStatusEquals(t, job, StatusQueued)
 	// Make sure we get an error if the data is not the correct type
 	if _, err := jobType.Schedule(0, time.Now(), 0); err == nil {
 		t.Errorf("Expected error when calling jobType.Schedule with incorrect data type but got none")

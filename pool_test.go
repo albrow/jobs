@@ -91,9 +91,9 @@ func TestGetNextJobs(t *testing.T) {
 	}
 }
 
-// TestJobStatusIsExecutingWhileExecuting tests that while a job is executing, its
+// TestStatusIsExecutingWhileExecuting tests that while a job is executing, its
 // status is set to StatusExecuting.
-func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
+func TestStatusIsExecutingWhileExecuting(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
@@ -154,7 +154,7 @@ func TestJobStatusIsExecutingWhileExecuting(t *testing.T) {
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		expectJobStatusEquals(t, job, StatusExecuting)
+		expectStatusEquals(t, job, StatusExecuting)
 	}
 
 	// Signal that the jobs can now exit
@@ -262,7 +262,7 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		expectJobStatusEquals(t, job, StatusFinished)
+		expectStatusEquals(t, job, StatusFinished)
 	}
 
 	// Make sure the next four jobs we queued are marked as queued
@@ -271,7 +271,7 @@ func TestJobsWithHigherPriorityExecutedFirst(t *testing.T) {
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		expectJobStatusEquals(t, job, StatusQueued)
+		expectStatusEquals(t, job, StatusQueued)
 	}
 }
 
@@ -669,7 +669,7 @@ func TestJobFail(t *testing.T) {
 	// Make sure that the error field is correct and that the job was
 	// moved to the failed set
 	expectJobFieldEquals(t, job, "error", failMsg, stringConverter)
-	expectJobStatusEquals(t, job, StatusFailed)
+	expectStatusEquals(t, job, StatusFailed)
 }
 
 // TestRetryJob creates and executes a job that is guaranteed to fail, then tests that

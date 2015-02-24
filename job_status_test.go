@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestJobStatusCount(t *testing.T) {
+func TestStatusCount(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 	jobs, err := createAndSaveTestJobs(5)
@@ -34,7 +34,7 @@ func TestJobStatusCount(t *testing.T) {
 	}
 }
 
-func TestJobStatusJobIds(t *testing.T) {
+func TestStatusJobIds(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 	jobs, err := createAndSaveTestJobs(5)

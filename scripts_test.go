@@ -130,15 +130,15 @@ func TestRetryOrFailJobScript(t *testing.T) {
 		}
 		if tc.expectedReturn == false {
 			// We expect the job to be in the failed set because it had no retries left
-			expectJobStatusEquals(t, tc.job, StatusFailed)
+			expectStatusEquals(t, tc.job, StatusFailed)
 		} else {
 			// We expect the job to be in the queued set because it was queued for retry
-			expectJobStatusEquals(t, tc.job, StatusQueued)
+			expectStatusEquals(t, tc.job, StatusQueued)
 		}
 	}
 }
 
-func TestSetJobStatusScript(t *testing.T) {
+func TestSetStatusScript(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
@@ -153,14 +153,14 @@ func TestSetJobStatusScript(t *testing.T) {
 			continue
 		}
 		tx := newTransaction()
-		tx.setJobStatus(job, status)
+		tx.setStatus(job, status)
 		if err := tx.exec(); err != nil {
 			t.Errorf("Unexpected error in tx.exec(): %s", err.Error())
 		}
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		expectJobStatusEquals(t, job, status)
+		expectStatusEquals(t, job, status)
 	}
 }
 
@@ -182,7 +182,7 @@ func TestDestroyJobScript(t *testing.T) {
 
 	// Make sure the job was destroyed
 	job.status = StatusDestroyed
-	expectJobStatusEquals(t, job, StatusDestroyed)
+	expectStatusEquals(t, job, StatusDestroyed)
 }
 
 func TestPurgeStalePoolScript(t *testing.T) {
@@ -238,14 +238,14 @@ func TestPurgeStalePoolScript(t *testing.T) {
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		expectJobStatusEquals(t, job, StatusExecuting)
+		expectStatusEquals(t, job, StatusExecuting)
 	}
 	// All the stale jobs should now be queued and have an empty poolId
 	for _, job := range staleJobs {
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		expectJobStatusEquals(t, job, StatusQueued)
+		expectStatusEquals(t, job, StatusQueued)
 		expectJobFieldEquals(t, job, "poolId", "", stringConverter)
 	}
 }

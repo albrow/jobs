@@ -13,9 +13,9 @@
 local jobId = ARGV[1]
 local jobKey = 'jobs:' .. jobId
 -- Remove the job from the status set
-local jobStatus = redis.call('HGET', jobKey, 'status')
-if jobStatus ~= '' then
-	local statusSet = 'jobs:' .. jobStatus
+local Status = redis.call('HGET', jobKey, 'status')
+if Status ~= '' then
+	local statusSet = 'jobs:' .. Status
 	redis.call('ZREM', statusSet, jobId)
 end
 -- Remove the job from the time index

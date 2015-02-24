@@ -15,7 +15,7 @@ type Job struct {
 	id       string
 	data     []byte
 	typ      *JobType
-	status   JobStatus
+	status   Status
 	time     int64
 	freq     int64
 	priority int
@@ -33,7 +33,7 @@ func (j *Job) Id() string {
 }
 
 // Status returns the status of the job.
-func (j *Job) Status() JobStatus {
+func (j *Job) Status() Status {
 	return j.status
 }
 
@@ -120,7 +120,7 @@ func (t *transaction) saveJob(job *Job) {
 	// Add the job attributes to a hash
 	t.command("HMSET", job.mainHashArgs(), nil)
 	// Add the job to the appropriate status set
-	t.setJobStatus(job, job.status)
+	t.setStatus(job, job.status)
 	// Add the job to the time index
 	t.addJobToTimeIndex(job)
 }
@@ -193,7 +193,7 @@ func (j *Job) Destroy() error {
 
 // setStatus updates the job's status in the database and moves it to the appropriate
 // status set.
-func (j *Job) setStatus(status JobStatus) error {
+func (j *Job) setStatus(status Status) error {
 	if j.id == "" {
 		return fmt.Errorf("jobs: Cannot set status to %s because job doesn't have an id.", status)
 	}
@@ -202,7 +202,7 @@ func (j *Job) setStatus(status JobStatus) error {
 	}
 	// Use a transaction to move the job to the appropriate status set and set its status
 	t := newTransaction()
-	t.setJobStatus(j, status)
+	t.setStatus(j, status)
 	if err := t.exec(); err != nil {
 		return err
 	}
@@ -286,7 +286,7 @@ func scanJob(reply interface{}, job *Job) error {
 			if err := scanString(fieldValue, &status); err != nil {
 				return err
 			}
-			job.status = JobStatus(status)
+			job.status = Status(status)
 		case "started":
 			if err := scanInt64(fieldValue, &(job.started)); err != nil {
 				return err

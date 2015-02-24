@@ -202,7 +202,7 @@ func expectSetDoesNotContain(t *testing.T, setName string, member string) {
 
 // expectJobInStatusSet sets an error via t.Errorf if job is not in the status set
 // corresponding to status.
-func expectJobInStatusSet(t *testing.T, j *Job, status JobStatus) {
+func expectJobInStatusSet(t *testing.T, j *Job, status Status) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", status.key(), j.priority, j.priority))
@@ -240,7 +240,7 @@ func expectJobInTimeIndex(t *testing.T, j *Job) {
 
 // expectJobNotInStatusSet sets an error via t.Errorf if job is in the status set
 // corresponding to status.
-func expectJobNotInStatusSet(t *testing.T, j *Job, status JobStatus) {
+func expectJobNotInStatusSet(t *testing.T, j *Job, status Status) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", status.key(), j.priority, j.priority))
@@ -272,11 +272,11 @@ func expectJobNotInTimeIndex(t *testing.T, j *Job) {
 	}
 }
 
-// expectJobStatusEquals sets an error via t.Errorf if job.status does not equal expected,
+// expectStatusEquals sets an error via t.Errorf if job.status does not equal expected,
 // if the status field for the job in the database does not equal expected, if the job is
 // not in the status set corresponding to expected, or if the job is in some other status
 // set.
-func expectJobStatusEquals(t *testing.T, job *Job, expected JobStatus) {
+func expectStatusEquals(t *testing.T, job *Job, expected Status) {
 	if job.status != expected {
 		t.Errorf("Expected jobs:%s status to be %s but got %s", job.id, expected, job.status)
 	}

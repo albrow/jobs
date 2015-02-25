@@ -65,3 +65,31 @@ func TestStatusJobIds(t *testing.T) {
 		}
 	}
 }
+
+func TestStatusJobs(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+	jobs, err := createAndSaveTestJobs(5)
+	if err != nil {
+		t.Errorf("Unexpected error: %s")
+	}
+	for _, status := range possibleStatuses {
+		if status == StatusDestroyed {
+			// Skip this one, since destroying a job means erasing all records from the database
+			continue
+		}
+		for _, job := range jobs {
+			job.setStatus(status)
+		}
+		gotJobs, err := status.Jobs()
+		if err != nil {
+			t.Errorf("Unexpected error in status.Jobs(): %s", err.Error())
+		}
+		if len(gotJobs) != len(jobs) {
+			t.Errorf("%s.Jobs() was incorrect. Expected slice of length %d but got %d", len(jobs), len(gotJobs))
+		}
+		if !reflect.DeepEqual(jobs, gotJobs) {
+			t.Errorf("%s.Jobs() was incorrect. Expected %v but got %v", status, jobs, gotJobs)
+		}
+	}
+}

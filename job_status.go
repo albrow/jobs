@@ -45,11 +45,23 @@ func (status Status) Count() (int, error) {
 }
 
 // JobIds returns the ids of all jobs that have the given status, ordered by
-// priority.
+// priority or an error if there was a problem connecting to the database.
 func (status Status) JobIds() ([]string, error) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	return redis.Strings(conn.Do("ZREVRANGE", status.key(), 0, -1))
+}
+
+// Jobs returns all jobs that have the given status, ordered by priority or
+// an error if there was a problem connecting to the database.
+func (status Status) Jobs() ([]*Job, error) {
+	t := newTransaction()
+	jobs := []*Job{}
+	t.getJobsByIds(status.key(), newScanJobsHandler(&jobs))
+	if err := t.exec(); err != nil {
+		return nil, err
+	}
+	return jobs, nil
 }
 
 // possibleStatuses is simply an array of all the possible job statuses.

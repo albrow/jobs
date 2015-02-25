@@ -153,6 +153,7 @@ func TestJobReschedule(t *testing.T) {
 		t.Errorf("Unexpected error in job.Reschedule: %s", err.Error())
 	}
 	expectJobFieldEquals(t, job, "time", unixNanoTime, int64Converter)
+	expectJobInTimeIndex(t, job)
 
 	// Run through a set of possible state paths and make sure the result is
 	// always what we expect

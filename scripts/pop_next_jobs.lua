@@ -9,7 +9,7 @@
 -- ready based on their time parameter. Then it adds those jobs to the
 -- executing set, sets their status to executing, and removes them from the
 -- queued set. It returns an array of arrays where each element contains the
--- fields for a particular job.
+-- fields for a particular job, and the jobs are sorted by priority.
 -- Here's an example response:
 -- [
 -- 	[
@@ -30,7 +30,7 @@
 -- 		"type", "emailJob",
 -- 		"time", 1234568,
 -- 		"freq", 0,
--- 		"priority", 100,
+-- 		"priority", 95,
 -- 		"retries", 0,
 -- 		"status", "executing",
 -- 		"started", 0,

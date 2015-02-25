@@ -249,3 +249,30 @@ func TestPurgeStalePoolScript(t *testing.T) {
 		expectJobFieldEquals(t, job, "poolId", "", stringConverter)
 	}
 }
+
+func TestGetJobsByIdsScript(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	// Create and save some jobs
+	jobs, err := createAndSaveTestJobs(5)
+	if err != nil {
+		t.Errorf("Unexpected error in createAndSaveTestJobs: %s", err.Error())
+	}
+
+	// Execute the script to get the jobs we just created
+	jobsCopy := []*Job{}
+	tx := newTransaction()
+	tx.getJobsByIds(StatusSaved.key(), newScanJobsHandler(&jobsCopy))
+	if err := tx.exec(); err != nil {
+		t.Error("Unexpected err in tx.exec(): %s", err.Error())
+	}
+
+	// Check the result
+	if len(jobsCopy) != len(jobs) {
+		t.Errorf("getJobsByIds did not return the right number of jobs. Expected %d but got %d", len(jobs), len(jobsCopy))
+	}
+	if !reflect.DeepEqual(jobs, jobsCopy) {
+		t.Errorf("Result of getJobsByIds was incorrect.\n\tExpected: %v\n\tbut got:  %v", jobs, jobsCopy)
+	}
+}

@@ -44,6 +44,7 @@ var (
 	setStatusScript      *redis.Script
 	destroyJobScript     *redis.Script
 	purgeStalePoolScript *redis.Script
+	getJobsByIdsScript   *redis.Script
 )
 
 var (
@@ -81,6 +82,11 @@ func init() {
 			script:   &purgeStalePoolScript,
 			filename: "purge_stale_pool.lua",
 			keyCount: 0,
+		},
+		{
+			script:   &getJobsByIdsScript,
+			filename: "get_jobs_by_ids.lua",
+			keyCount: 1,
 		},
 	}
 	for _, s := range scriptsToParse {
@@ -137,4 +143,12 @@ func (t *transaction) destroyJob(job *Job) {
 // with the stale pool that are stuck in the executing set.
 func (t *transaction) purgeStalePool(poolId string) {
 	t.script(purgeStalePoolScript, redis.Args{poolId}, nil)
+}
+
+// getJobsByIds is a small function wrapper around getJobsByIdsScript.
+// It offers some type safety and helps make sure the arguments you pass through to the are correct.
+// The script will return all the fields for jobs which are identified by ids in the given sorted set.
+// You can use the handler to scan the jobs into a slice of jobs.
+func (t *transaction) getJobsByIds(setKey string, handler replyHandler) {
+	t.script(getJobsByIdsScript, redis.Args{setKey}, handler)
 }

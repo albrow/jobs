@@ -8,6 +8,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestJobSave(t *testing.T) {
@@ -40,7 +41,7 @@ func TestJobSave(t *testing.T) {
 	expectJobFieldEquals(t, job, "poolId", job.poolId, stringConverter)
 
 	// Make sure the job status was correct
-	expectJobStatusEquals(t, job, StatusSaved)
+	expectStatusEquals(t, job, StatusSaved)
 
 	// Make sure the job was indexed by its time correctly
 	expectJobInTimeIndex(t, job)
@@ -82,7 +83,7 @@ func TestJobRefresh(t *testing.T) {
 	}
 }
 
-func TestJobEnqueue(t *testing.T) {
+func TestJobenqueue(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
@@ -91,14 +92,14 @@ func TestJobEnqueue(t *testing.T) {
 	statePaths := []statePath{
 		{
 			steps: []func(*Job) error{
-				// Just call Enqueue after creating a new job
+				// Just call enqueue after creating a new job
 				enqueueJob,
 			},
 			expected: StatusQueued,
 		},
 		{
 			steps: []func(*Job) error{
-				// Call Enqueue, then Cancel, then Enqueue again
+				// Call enqueue, then Cancel, then enqueue again
 				enqueueJob,
 				cancelJob,
 				enqueueJob,
@@ -125,12 +126,51 @@ func TestJobCancel(t *testing.T) {
 		},
 		{
 			steps: []func(*Job) error{
-				// Call Cancel, then Enqueue, then Cancel again
+				// Call Cancel, then enqueue, then Cancel again
 				cancelJob,
 				enqueueJob,
 				cancelJob,
 			},
 			expected: StatusCancelled,
+		},
+	}
+	testJobStatePaths(t, statePaths)
+}
+
+func TestJobReschedule(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	// Create and save a new job, then make sure that the time
+	// parameter is set correctly when we call reschedule.
+	job, err := createAndSaveTestJob()
+	if err != nil {
+		t.Errorf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
+	}
+	currentTime := time.Now()
+	unixNanoTime := currentTime.UTC().UnixNano()
+	if err := job.Reschedule(currentTime); err != nil {
+		t.Errorf("Unexpected error in job.Reschedule: %s", err.Error())
+	}
+	expectJobFieldEquals(t, job, "time", unixNanoTime, int64Converter)
+
+	// Run through a set of possible state paths and make sure the result is
+	// always what we expect
+	statePaths := []statePath{
+		{
+			steps: []func(*Job) error{
+				// Just call Reschedule after creating a new job
+				rescheduleJob,
+			},
+			expected: StatusQueued,
+		},
+		{
+			steps: []func(*Job) error{
+				// Call Cancel, then reschedule
+				cancelJob,
+				rescheduleJob,
+			},
+			expected: StatusQueued,
 		},
 	}
 	testJobStatePaths(t, statePaths)
@@ -199,19 +239,22 @@ func TestJobSetError(t *testing.T) {
 // to be after the last step.
 type statePath struct {
 	steps    []func(*Job) error
-	expected JobStatus
+	expected Status
 }
 
 var (
 	// Some easy to use step functions
 	enqueueJob = func(j *Job) error {
-		return j.Enqueue()
+		return j.enqueue()
 	}
 	cancelJob = func(j *Job) error {
 		return j.Cancel()
 	}
 	destroyJob = func(j *Job) error {
 		return j.Destroy()
+	}
+	rescheduleJob = func(j *Job) error {
+		return j.Reschedule(time.Now())
 	}
 )
 
@@ -233,7 +276,7 @@ func testJobStatePaths(t *testing.T, statePaths []statePath) {
 				t.Errorf("Unexpected error in step %v: %s", step, err)
 			}
 		}
-		expectJobStatusEquals(t, job, statePath.expected)
+		expectStatusEquals(t, job, statePath.expected)
 	}
 }
 
@@ -256,28 +299,5 @@ func TestScanJob(t *testing.T) {
 	}
 	if !reflect.DeepEqual(job, jobCopy) {
 		t.Errorf("Result of scanJob was incorrect.\n\tExpected %+v\n\tbut got  %+v", job, jobCopy)
-	}
-}
-
-func TestJobStatusCount(t *testing.T) {
-	testingSetUp()
-	defer testingTeardown()
-	job, err := createAndSaveTestJob()
-	if err != nil {
-		t.Errorf("Unexpected error: %s")
-	}
-	for _, status := range possibleStatuses {
-		if status == StatusDestroyed {
-			// Skip this one, since destroying a job means erasing all records from the database
-			continue
-		}
-		job.setStatus(status)
-		count, err := status.Count()
-		if err != nil {
-			t.Errorf("Unexpected error in status.Count(): %s", err.Error())
-		}
-		if count != 1 {
-			t.Errorf("Expected %s.Count() to return 1 after setting job status to %s, but got %d", status, status, count)
-		}
 	}
 }

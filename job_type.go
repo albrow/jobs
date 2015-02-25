@@ -10,18 +10,18 @@ import (
 	"time"
 )
 
-// jobTypes is map of job type names to *JobType
-var jobTypes = map[string]*JobType{}
+// Types is map of job type names to *Type
+var Types = map[string]*Type{}
 
-// JobType represents a type of job that can be executed by workers
-type JobType struct {
+// Type represents a type of job that can be executed by workers
+type Type struct {
 	name     string
 	handler  interface{}
 	retries  uint
 	dataType reflect.Type
 }
 
-// ErrorNameAlreadyRegistered is returned whenever RegisterJobType is called
+// ErrorNameAlreadyRegistered is returned whenever RegisterType is called
 // with a name that has already been registered.
 type ErrorNameAlreadyRegistered struct {
 	name string
@@ -37,7 +37,7 @@ func newErrorNameAlreadyRegistered(name string) ErrorNameAlreadyRegistered {
 	return ErrorNameAlreadyRegistered{name: name}
 }
 
-// RegisterJobType registers a new type of job that can be executed by workers.
+// RegisterType registers a new type of job that can be executed by workers.
 // name should be a unique string identifier for the job.
 // retries is the number of times this type of job should be retried if it fails.
 // handler is a function that a worker will call in order to execute the job.
@@ -45,33 +45,33 @@ func newErrorNameAlreadyRegistered(name string) ErrorNameAlreadyRegistered {
 // corresponding to the data for a job of this type. All jobs of this type must have
 // data with the same type as the first argument to handler, or nil if the handler
 // accepts no arguments.
-func RegisterJobType(name string, retries uint, handler interface{}) (*JobType, error) {
+func RegisterType(name string, retries uint, handler interface{}) (*Type, error) {
 	// Make sure name is unique
-	if _, found := jobTypes[name]; found {
-		return jobTypes[name], newErrorNameAlreadyRegistered(name)
+	if _, found := Types[name]; found {
+		return Types[name], newErrorNameAlreadyRegistered(name)
 	}
 	// Make sure handler is a function
 	handlerType := reflect.TypeOf(handler)
 	if handlerType.Kind() != reflect.Func {
-		return nil, fmt.Errorf("jobs: in RegisterNewJobType, handler must be a function. Got %T", handler)
+		return nil, fmt.Errorf("jobs: in RegisterNewType, handler must be a function. Got %T", handler)
 	}
 	if handlerType.NumIn() > 1 {
-		return nil, fmt.Errorf("jobs: in RegisterNewJobType, handler must accept 0 or 1 arguments. Got %d.", handlerType.NumIn())
+		return nil, fmt.Errorf("jobs: in RegisterNewType, handler must accept 0 or 1 arguments. Got %d.", handlerType.NumIn())
 	}
-	jobType := &JobType{
+	Type := &Type{
 		name:    name,
 		handler: handler,
 		retries: retries,
 	}
 	if handlerType.NumIn() == 1 {
-		jobType.dataType = handlerType.In(0)
+		Type.dataType = handlerType.In(0)
 	}
-	jobTypes[name] = jobType
-	return jobType, nil
+	Types[name] = Type
+	return Type, nil
 }
 
-// String satisfies the Stringer interface and returns the name of the JobType.
-func (jt *JobType) String() string {
+// String satisfies the Stringer interface and returns the name of the Type.
+func (jt *Type) String() string {
 	return jt.name
 }
 
@@ -79,8 +79,8 @@ func (jt *JobType) String() string {
 // Jobs with a higher priority will be executed first. The job will not be
 // executed until after time. data is the data associated with this particular
 // job and should have the same type as the first argument to the handler for this
-// JobType.
-func (jt *JobType) Schedule(priority int, time time.Time, data interface{}) (*Job, error) {
+// Type.
+func (jt *Type) Schedule(priority int, time time.Time, data interface{}) (*Job, error) {
 	// Encode the data
 	encodedData, err := jt.encodeData(data)
 	if err != nil {
@@ -106,9 +106,9 @@ func (jt *JobType) Schedule(priority int, time time.Time, data interface{}) (*Jo
 // Jobs with a higher priority will be executed first. The job will not be executed until after
 // time. After time, the job will be executed with a frequency specified by freq. data is the
 // data associated with this particular job and should have the same type as the first argument
-// to the handler for this JobType. Every recurring execution of the job will use the
+// to the handler for this Type. Every recurring execution of the job will use the
 // same data.
-func (jt *JobType) ScheduleRecurring(priority int, time time.Time, freq time.Duration, data interface{}) (*Job, error) {
+func (jt *Type) ScheduleRecurring(priority int, time time.Time, freq time.Duration, data interface{}) (*Job, error) {
 	// Encode the data
 	encodedData, err := jt.encodeData(data)
 	if err != nil {
@@ -131,13 +131,13 @@ func (jt *JobType) ScheduleRecurring(priority int, time time.Time, freq time.Dur
 	return job, nil
 }
 
-// encodeData checks that the type of data is what we expect based on the handler for the JobType.
+// encodeData checks that the type of data is what we expect based on the handler for the Type.
 // If it is, it encodes the data into a slice of bytes.
-func (jt *JobType) encodeData(data interface{}) ([]byte, error) {
+func (jt *Type) encodeData(data interface{}) ([]byte, error) {
 	// Check the type of data
 	dataType := reflect.TypeOf(data)
 	if dataType != jt.dataType {
-		return nil, fmt.Errorf("jobs: provided data was not of the correct type.\nExpected %s for JobType %s, but got %s", jt.dataType, jt, dataType)
+		return nil, fmt.Errorf("jobs: provided data was not of the correct type.\nExpected %s for Type %s, but got %s", jt.dataType, jt, dataType)
 	}
 	// Encode the data
 	encodedData, err := encode(data)

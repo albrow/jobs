@@ -86,10 +86,10 @@ func (w *worker) doJob(job *Job) {
 		job.time = job.nextTime()
 		t1.command("HSET", redis.Args{job.key(), "time", job.time}, nil)
 		t1.addJobToTimeIndex(job)
-		t1.setJobStatus(job, StatusQueued)
+		t1.setStatus(job, StatusQueued)
 	} else {
 		// Otherwise, set status to finished
-		t1.setJobStatus(job, StatusFinished)
+		t1.setStatus(job, StatusFinished)
 	}
 	if err := t1.exec(); err != nil {
 		// NOTE: panics will be caught by the recover statment above

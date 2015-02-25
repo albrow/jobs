@@ -74,7 +74,7 @@ func TestRetryOrFailJobScript(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
-	testJob, err := RegisterJobType("testJob", 0, func() {})
+	testJob, err := RegisterType("testJob", 0, func() {})
 	if err != nil {
 		t.Errorf("Unexpected error registering job type: %s", err.Error())
 	}
@@ -130,15 +130,15 @@ func TestRetryOrFailJobScript(t *testing.T) {
 		}
 		if tc.expectedReturn == false {
 			// We expect the job to be in the failed set because it had no retries left
-			expectJobStatusEquals(t, tc.job, StatusFailed)
+			expectStatusEquals(t, tc.job, StatusFailed)
 		} else {
 			// We expect the job to be in the queued set because it was queued for retry
-			expectJobStatusEquals(t, tc.job, StatusQueued)
+			expectStatusEquals(t, tc.job, StatusQueued)
 		}
 	}
 }
 
-func TestSetJobStatusScript(t *testing.T) {
+func TestSetStatusScript(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
@@ -153,14 +153,14 @@ func TestSetJobStatusScript(t *testing.T) {
 			continue
 		}
 		tx := newTransaction()
-		tx.setJobStatus(job, status)
+		tx.setStatus(job, status)
 		if err := tx.exec(); err != nil {
 			t.Errorf("Unexpected error in tx.exec(): %s", err.Error())
 		}
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		expectJobStatusEquals(t, job, status)
+		expectStatusEquals(t, job, status)
 	}
 }
 
@@ -182,16 +182,16 @@ func TestDestroyJobScript(t *testing.T) {
 
 	// Make sure the job was destroyed
 	job.status = StatusDestroyed
-	expectJobStatusEquals(t, job, StatusDestroyed)
+	expectStatusEquals(t, job, StatusDestroyed)
 }
 
 func TestPurgeStalePoolScript(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
-	testJobType, err := RegisterJobType("testJobType", 0, func() {})
+	testType, err := RegisterType("testType", 0, func() {})
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterJobType(): %s", err.Error())
+		t.Errorf("Unexpected error in RegisterType(): %s", err.Error())
 	}
 
 	// Set up the database. We'll put some jobs in the executing set with a stale poolId,
@@ -199,7 +199,7 @@ func TestPurgeStalePoolScript(t *testing.T) {
 	staleJobs := []*Job{}
 	stalePoolId := "stalePool"
 	for i := 0; i < 4; i++ {
-		job := &Job{typ: testJobType, status: StatusExecuting, poolId: stalePoolId}
+		job := &Job{typ: testType, status: StatusExecuting, poolId: stalePoolId}
 		if err := job.save(); err != nil {
 			t.Errorf("Unexpected error in job.save(): %s", err.Error())
 		}
@@ -208,7 +208,7 @@ func TestPurgeStalePoolScript(t *testing.T) {
 	activeJobs := []*Job{}
 	activePoolId := "activePool"
 	for i := 0; i < 4; i++ {
-		job := &Job{typ: testJobType, status: StatusExecuting, poolId: activePoolId}
+		job := &Job{typ: testType, status: StatusExecuting, poolId: activePoolId}
 		if err := job.save(); err != nil {
 			t.Errorf("Unexpected error in job.save(): %s", err.Error())
 		}
@@ -238,14 +238,41 @@ func TestPurgeStalePoolScript(t *testing.T) {
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		expectJobStatusEquals(t, job, StatusExecuting)
+		expectStatusEquals(t, job, StatusExecuting)
 	}
 	// All the stale jobs should now be queued and have an empty poolId
 	for _, job := range staleJobs {
 		if err := job.Refresh(); err != nil {
 			t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 		}
-		expectJobStatusEquals(t, job, StatusQueued)
+		expectStatusEquals(t, job, StatusQueued)
 		expectJobFieldEquals(t, job, "poolId", "", stringConverter)
+	}
+}
+
+func TestGetJobsByIdsScript(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	// Create and save some jobs
+	jobs, err := createAndSaveTestJobs(5)
+	if err != nil {
+		t.Errorf("Unexpected error in createAndSaveTestJobs: %s", err.Error())
+	}
+
+	// Execute the script to get the jobs we just created
+	jobsCopy := []*Job{}
+	tx := newTransaction()
+	tx.getJobsByIds(StatusSaved.key(), newScanJobsHandler(&jobsCopy))
+	if err := tx.exec(); err != nil {
+		t.Error("Unexpected err in tx.exec(): %s", err.Error())
+	}
+
+	// Check the result
+	if len(jobsCopy) != len(jobs) {
+		t.Errorf("getJobsByIds did not return the right number of jobs. Expected %d but got %d", len(jobs), len(jobsCopy))
+	}
+	if !reflect.DeepEqual(jobs, jobsCopy) {
+		t.Errorf("Result of getJobsByIds was incorrect.\n\tExpected: %v\n\tbut got:  %v", jobs, jobsCopy)
 	}
 }

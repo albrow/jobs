@@ -4,22 +4,24 @@
 
 // package jobs is a persistent and flexible background jobs library.
 //
-// Version: 0.0.1
+// Version: 0.1.0
 //
-// Jobs supports the following features:
+// Jobs is powered by redis and supports the following features:
 //
-//  - A job can encapsulate any arbitrary functionality. A job can do anything
-//    which can be done in a go function.
-//  - A job can be one-off (only executed once) or recurring (scheduled to
-//    execute at a specific interval).
-//  - A job can be retried a specified number of times if it fails.
-//  - A job is persistent, with protections against power loss and other worst
-//    case scenarios.
-//  - Jobs can be executed by any number of concurrent workers accross any
-//    number of machines, and each job will only be executed once.
-//  - You can query the database to find out e.g. the number of jobs that are
-//    currently executing or how long a particular job took to execute.
-//  - Any job that permanently fails will have its error captured and stored.
+// - A job can encapsulate any arbitrary functionality. A job can do anything
+//   which can be done in a go function.
+// - A job can be one-off (only executed once) or recurring (scheduled to
+//   execute at a specific interval).
+// - A job can be retried a specified number of times if it fails.
+// - A job is persistent, with protections against power loss and other worst
+//   case scenarios.
+// - Jobs can be executed by any number of concurrent workers accross any
+//   number of machines.
+// - Every job will be executed *at least* once, and in all but the most extreme
+//   cases will be executed *exactly* once.
+// - You can query the database to find out e.g. the number of jobs that are
+//   currently executing or how long a particular job took to execute.
+// - Any job that permanently fails will have its error captured and stored.
 //
 // Why is it Useful
 //

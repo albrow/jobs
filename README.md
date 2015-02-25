@@ -5,9 +5,9 @@ A persistent and flexible background jobs library for go.
 
 [![GoDoc](https://godoc.org/github.com/albrow/jobs?status.svg)](https://godoc.org/github.com/albrow/jobs)
 
-Version: 0.0.1
+Version: 0.1.0
 
-Supports the following features:
+Jobs is powered by redis and supports the following features:
 
  - A job can encapsulate any arbitrary functionality. A job can do anything
    which can be done in a go function.
@@ -15,9 +15,12 @@ Supports the following features:
    execute at a specific interval).
  - A job can be retried a specified number of times if it fails.
  - A job is persistent, with protections against power loss and other worst
-   case scenarios.
- - Jobs can be executed by any number of concurrent workers accross any
-   number of machines, and each job will only be executed once.
+   case scenarios. (See the [Guarantees](#guarantees) section below)
+ - Work on jobs can be spread amongst any number of concurrent workers accross any
+   number of machines.
+ - Every job will be executed *at least* once, and in all but the most extreme
+   cases will be executed *exactly* once. (See the [Guarantees](#guarantees)
+   section below)
  - You can query the database to find out e.g. the number of jobs that are
    currently executing or how long a particular job took to execute.
  - Any job that permanently fails will have its error captured and stored.
@@ -46,7 +49,7 @@ which sends a welcome email to users:
 
 ``` go
 // We'll specify that we want the job to be retried 3 times before finally failing
-welcomeEmailJobs, err := jobs.RegisterJobType("welcomeEmail", 3, func(user *User) {
+welcomeEmailJobs, err := jobs.RegisterType("welcomeEmail", 3, func(user *User) {
 	msg := fmt.Sprintf("Hello, %s! Thanks for signing up for foo.com.", user.Name)
 	if err := emails.Send(user.EmailAddress, msg); err != nil {
 		// Panics will be captured by a worker, triggering up to 3 retries
@@ -121,6 +124,54 @@ func main() {
 
 You can also call Close and Wait at any time to manually stop the pool from executing new jobs. In this
 case, any jobs that are currently being executed will still finish.
+
+
+Guarantees
+-----------
+
+### Persistence
+
+Since jobs is powered by redis, there is a chance that you can lose data with the default redis configuration.
+To get the best persistence guarantees, you should set redis to use both AOF and RDB persistence modes and set
+fsync to "always". With these settings, redis is more or less
+[as persistent as a database like postgres](http://redis.io/topics/persistence#ok-so-what-should-i-use). If want
+better performance and are okay with a greater (but still very small) chance of losing data, you can set fsync
+to "everysec".
+
+[Read more about redis persistence](http://redis.io/topics/persistence).
+
+### Atomicity
+
+Jobs is carefully written using redis transactions and lua scripting so that all database changes are atomic.
+If redis crashes in the middle of a transaction or script execution, it is possible that your AOF file can become
+corrupted. If this happens, redis will refuse to start until the AOF file is fixed. It is relatively easy to fix
+the problem with the redis-check-aof tool, which will remove the partial transaction from the AOF file. In effect,
+this guarantees that modifications of the database are atomic, even in the event of a power loss or hard reset,
+with the caveat that you may need to break out the redis-check-aof tool in the worst case scenario.
+
+Read more about redis [transactions](http://redis.io/topics/transactions) and
+[scripts](http://redis.io/commands#scripting).
+
+### Job Execution
+
+Jobs gaurantees that a job will be executed *at least* once, provided it has been persisted on disk. (See the section
+on [Persistence](#persistence) directly above). A job can only picked up by one pool at a time becuase a pool
+atomically pops (gets and immediately moves) the next available jobs from the database. A job can only be executed
+by one worker at a time becuase the jobs are delegated to workers via a shared channel. Each worker pool checks on
+the health of all the other poools when it starts. If a pool crashes or is otherwise disconnected, any jobs it had
+grabbed from the database that did not yet finish will be requeued and picked up by a different pool.
+
+There are two known ways that a job may be executed more than once:
+
+1) If there is a power failure or hard reset while a worker is in the middle of executing a job, the job may be
+  stuck in a half-executed state. Since there is no way to know how much of the job was successfully completed,
+  the job will be requeued and picked up by a different pool, where it may be partially or fully executed
+  more than once.
+2) If a pool becomes disconnected, it will be considered stale and its jobs will be requeued and reclaimed
+  by a different pool. However, if the stale pool is able to partly or fully execute jobs without a reliable
+  internet connection, any jobs belonging to the stale pool might be executed more than once. You can increase
+  the [StaleTimeout](https://godoc.org/github.com/albrow/jobs#PoolConfig) parameter for a pool to make this
+  scenario less likely.
 
 
 License

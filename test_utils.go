@@ -28,7 +28,7 @@ func testingSetUp() {
 		Config.Db.Network = "unix"
 	})
 	// Clear out any old job types
-	jobTypes = map[string]*JobType{}
+	Types = map[string]*Type{}
 }
 
 // testingSetUp should be called at the end of any test that touches the database
@@ -48,9 +48,9 @@ func flushdb() {
 
 // createTestJob creates and returns a job that can be used for testing.
 func createTestJob() (*Job, error) {
-	// Register the "testJobType"
-	jobTypeName := "testJobType"
-	jobType, err := RegisterJobType(jobTypeName, 0, func() {})
+	// Register the "testType"
+	TypeName := "testType"
+	Type, err := RegisterType(TypeName, 0, func() {})
 	if err != nil {
 		if _, ok := err.(ErrorNameAlreadyRegistered); !ok {
 			// If the name was already registered, that's fine.
@@ -62,15 +62,43 @@ func createTestJob() (*Job, error) {
 	j := &Job{
 		id:       "testJob",
 		data:     []byte("testData"),
-		typ:      jobType,
+		typ:      Type,
 		time:     time.Now().UTC().UnixNano(),
 		priority: 100,
 	}
 	return j, nil
 }
 
+// createTestJobs creates and returns n jobs that can be used for testing.
+// Each job has a unique id and priority, and the jobs are returned in order
+// of decreasing priority.
+func createTestJobs(n int) ([]*Job, error) {
+	// Register the "testType"
+	TypeName := "testType"
+	Type, err := RegisterType(TypeName, 0, func() {})
+	if err != nil {
+		if _, ok := err.(ErrorNameAlreadyRegistered); !ok {
+			// If the name was already registered, that's fine.
+			// We should return any other type of error
+			return nil, err
+		}
+	}
+	jobs := make([]*Job, n)
+	for i := 0; i < n; i++ {
+		jobs[i] = &Job{
+			id:       fmt.Sprintf("testJob%d", i),
+			data:     []byte("testData"),
+			typ:      Type,
+			time:     time.Now().UTC().UnixNano(),
+			priority: (n - i) + 1,
+		}
+	}
+	return jobs, nil
+}
+
 // createAndSaveTestJob creates, saves, and returns a job which can be used
-// for testing.
+// for testing. Each job has a unique id and priority, and the jobs are
+// returned in order of decreasing priority.
 func createAndSaveTestJob() (*Job, error) {
 	j, err := createTestJob()
 	if err != nil {
@@ -80,6 +108,24 @@ func createAndSaveTestJob() (*Job, error) {
 		return nil, fmt.Errorf("Unexpected error in j.save(): %s", err.Error())
 	}
 	return j, nil
+}
+
+// createAndSaveTestJobs creates, saves, and returns n jobs which can be used
+// for testing.
+func createAndSaveTestJobs(n int) ([]*Job, error) {
+	jobs, err := createTestJobs(n)
+	if err != nil {
+		return nil, err
+	}
+	// Save all the jobs in a single transaction
+	t := newTransaction()
+	for _, job := range jobs {
+		t.saveJob(job)
+	}
+	if err := t.exec(); err != nil {
+		return nil, err
+	}
+	return jobs, nil
 }
 
 // expectJobFieldEquals sets an error via t.Errorf if the the field identified by fieldName does
@@ -156,7 +202,7 @@ func expectSetDoesNotContain(t *testing.T, setName string, member string) {
 
 // expectJobInStatusSet sets an error via t.Errorf if job is not in the status set
 // corresponding to status.
-func expectJobInStatusSet(t *testing.T, j *Job, status JobStatus) {
+func expectJobInStatusSet(t *testing.T, j *Job, status Status) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", status.key(), j.priority, j.priority))
@@ -194,7 +240,7 @@ func expectJobInTimeIndex(t *testing.T, j *Job) {
 
 // expectJobNotInStatusSet sets an error via t.Errorf if job is in the status set
 // corresponding to status.
-func expectJobNotInStatusSet(t *testing.T, j *Job, status JobStatus) {
+func expectJobNotInStatusSet(t *testing.T, j *Job, status Status) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", status.key(), j.priority, j.priority))
@@ -226,11 +272,11 @@ func expectJobNotInTimeIndex(t *testing.T, j *Job) {
 	}
 }
 
-// expectJobStatusEquals sets an error via t.Errorf if job.status does not equal expected,
+// expectStatusEquals sets an error via t.Errorf if job.status does not equal expected,
 // if the status field for the job in the database does not equal expected, if the job is
 // not in the status set corresponding to expected, or if the job is in some other status
 // set.
-func expectJobStatusEquals(t *testing.T, job *Job, expected JobStatus) {
+func expectStatusEquals(t *testing.T, job *Job, expected Status) {
 	if job.status != expected {
 		t.Errorf("Expected jobs:%s status to be %s but got %s", job.id, expected, job.status)
 	}

@@ -14,8 +14,8 @@ import (
 type Job struct {
 	id       string
 	data     []byte
-	typ      *JobType
-	status   JobStatus
+	typ      *Type
+	status   Status
 	time     int64
 	freq     int64
 	priority int
@@ -26,53 +26,6 @@ type Job struct {
 	poolId   string
 }
 
-// JobStatus represents the different statuses a job can have.
-type JobStatus string
-
-const (
-	// StatusSaved is the status of any job that has been saved into the database but not yet queued
-	StatusSaved JobStatus = "saved"
-	// StatusQueued is the status of any job that has been queued for execution but not yet selected
-	StatusQueued JobStatus = "queued"
-	// StatusExecuting is the status of any job that has been selected for execution and is being delegated
-	// to some worker and any job that is currently being executed by some worker.
-	StatusExecuting JobStatus = "executing"
-	// StatusFinished is the status of any job that has been successfully executed.
-	StatusFinished JobStatus = "finished"
-	// StatusFailed is the status of any job that failed to execute and for which there are no remaining retries.
-	StatusFailed JobStatus = "failed"
-	// StatusCancelled is the status of any job that was manually cancelled.
-	StatusCancelled JobStatus = "cancelled"
-	// StatusDestroyed is the status of any job that has been destroyed, i.e. completely removed
-	// from the database.
-	StatusDestroyed JobStatus = "destroyed"
-)
-
-// key returns the key used for the sorted set in redis which will hold
-// all jobs with this status.
-func (status JobStatus) key() string {
-	return "jobs:" + string(status)
-}
-
-// Count returns the number of jobs that currently have the given status
-// or an error if there was a problem connecting to the database.
-func (status JobStatus) Count() (int, error) {
-	conn := redisPool.Get()
-	defer conn.Close()
-	return redis.Int(conn.Do("ZCARD", status.key()))
-}
-
-// possibleStatuses is simply an array of all the possible job statuses.
-var possibleStatuses = []JobStatus{
-	StatusSaved,
-	StatusQueued,
-	StatusExecuting,
-	StatusFinished,
-	StatusFailed,
-	StatusCancelled,
-	StatusDestroyed,
-}
-
 // Id returns the unique identifier used for the job. If the job has not yet
 // been saved to the database, it may return an empty string.
 func (j *Job) Id() string {
@@ -80,7 +33,7 @@ func (j *Job) Id() string {
 }
 
 // Status returns the status of the job.
-func (j *Job) Status() JobStatus {
+func (j *Job) Status() Status {
 	return j.status
 }
 
@@ -140,7 +93,7 @@ func (j *Job) nextTime() int64 {
 }
 
 // save writes the job to the database and adds it to the appropriate indexes and status
-// sets, but does not enqueue it. If you want to add it to the queue, use the Enqueue method
+// sets, but does not enqueue it. If you want to add it to the queue, use the enqueue method
 // after save.
 func (j *Job) save() error {
 	t := newTransaction()
@@ -167,7 +120,7 @@ func (t *transaction) saveJob(job *Job) {
 	// Add the job attributes to a hash
 	t.command("HMSET", job.mainHashArgs(), nil)
 	// Add the job to the appropriate status set
-	t.setJobStatus(job, job.status)
+	t.setStatus(job, job.status)
 	// Add the job to the time index
 	t.addJobToTimeIndex(job)
 }
@@ -190,12 +143,31 @@ func (j *Job) Refresh() error {
 	return nil
 }
 
-// Enqueue adds the job to the queue and sets its status to StatusQueued. Queued jobs will
+// enqueue adds the job to the queue and sets its status to StatusQueued. Queued jobs will
 // be completed by workers in order of priority.
-func (j *Job) Enqueue() error {
+func (j *Job) enqueue() error {
 	if err := j.setStatus(StatusQueued); err != nil {
 		return err
 	}
+	return nil
+}
+
+// Reschedule reschedules the job with the given time. It can be used to reschedule
+// cancelled jobs. It may also be used to reschedule finished or failed jobs, however,
+// in most cases if you want to reschedule finished jobs you should use the ScheduleRecurring
+// method and if you want to reschedule failed jobs, you should set the number of retries > 0
+// when registering the job type. Reschedule returns an error if there was a problem connecting
+// to the database.
+func (j *Job) Reschedule(time time.Time) error {
+	t := newTransaction()
+	unixNanoTime := time.UTC().UnixNano()
+	t.command("HSET", redis.Args{j.key(), "time", unixNanoTime}, nil)
+	t.setStatus(j, StatusQueued)
+	if err := t.exec(); err != nil {
+		return err
+	}
+	j.time = unixNanoTime
+	j.status = StatusQueued
 	return nil
 }
 
@@ -240,7 +212,7 @@ func (j *Job) Destroy() error {
 
 // setStatus updates the job's status in the database and moves it to the appropriate
 // status set.
-func (j *Job) setStatus(status JobStatus) error {
+func (j *Job) setStatus(status Status) error {
 	if j.id == "" {
 		return fmt.Errorf("jobs: Cannot set status to %s because job doesn't have an id.", status)
 	}
@@ -249,7 +221,7 @@ func (j *Job) setStatus(status JobStatus) error {
 	}
 	// Use a transaction to move the job to the appropriate status set and set its status
 	t := newTransaction()
-	t.setJobStatus(j, status)
+	t.setStatus(j, status)
 	if err := t.exec(); err != nil {
 		return err
 	}
@@ -307,11 +279,11 @@ func scanJob(reply interface{}, job *Job) error {
 			if err := scanString(fieldValue, &typeName); err != nil {
 				return err
 			}
-			jobType, found := jobTypes[typeName]
+			Type, found := Types[typeName]
 			if !found {
-				return fmt.Errorf("jobs: In scanJob: Could not find JobType with name = %s", typeName)
+				return fmt.Errorf("jobs: In scanJob: Could not find Type with name = %s", typeName)
 			}
-			job.typ = jobType
+			job.typ = Type
 		case "time":
 			if err := scanInt64(fieldValue, &(job.time)); err != nil {
 				return err
@@ -333,7 +305,7 @@ func scanJob(reply interface{}, job *Job) error {
 			if err := scanString(fieldValue, &status); err != nil {
 				return err
 			}
-			job.status = JobStatus(status)
+			job.status = Status(status)
 		case "started":
 			if err := scanInt64(fieldValue, &(job.started)); err != nil {
 				return err
@@ -422,4 +394,16 @@ func scanBytes(reply interface{}, v *[]byte) error {
 func (t *transaction) scanJobById(id string, job *Job) {
 	job.id = id
 	t.command("HGETALL", redis.Args{job.key()}, newScanJobHandler(job))
+}
+
+// FindById returns the job with the given id or an error if the job cannot be found
+// or there was a problem connecting to the database.
+func FindById(id string) (*Job, error) {
+	job := &Job{}
+	t := newTransaction()
+	t.scanJobById(id, job)
+	if err := t.exec(); err != nil {
+		return nil, err
+	}
+	return job, nil
 }

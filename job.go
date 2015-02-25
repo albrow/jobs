@@ -163,10 +163,11 @@ func (j *Job) Reschedule(time time.Time) error {
 	unixNanoTime := time.UTC().UnixNano()
 	t.command("HSET", redis.Args{j.key(), "time", unixNanoTime}, nil)
 	t.setStatus(j, StatusQueued)
+	j.time = unixNanoTime
+	t.addJobToTimeIndex(j)
 	if err := t.exec(); err != nil {
 		return err
 	}
-	j.time = unixNanoTime
 	j.status = StatusQueued
 	return nil
 }

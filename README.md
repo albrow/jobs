@@ -5,7 +5,7 @@ A persistent and flexible background jobs library for go.
 
 [![GoDoc](https://godoc.org/github.com/albrow/jobs?status.svg)](https://godoc.org/github.com/albrow/jobs)
 
-Version: 0.1.0
+Version: 0.1.1
 
 Jobs is powered by redis and supports the following features:
 
@@ -163,15 +163,15 @@ grabbed from the database that did not yet finish will be requeued and picked up
 
 There are two known ways that a job may be executed more than once:
 
-1) If there is a power failure or hard reset while a worker is in the middle of executing a job, the job may be
-  stuck in a half-executed state. Since there is no way to know how much of the job was successfully completed,
-  the job will be requeued and picked up by a different pool, where it may be partially or fully executed
-  more than once.
-2) If a pool becomes disconnected, it will be considered stale and its jobs will be requeued and reclaimed
-  by a different pool. However, if the stale pool is able to partly or fully execute jobs without a reliable
-  internet connection, any jobs belonging to the stale pool might be executed more than once. You can increase
-  the [StaleTimeout](https://godoc.org/github.com/albrow/jobs#PoolConfig) parameter for a pool to make this
-  scenario less likely.
+1. If there is a power failure or hard reset while a worker is in the middle of executing a job, the job may be
+   stuck in a half-executed state. Since there is no way to know how much of the job was successfully completed,
+   the job will be requeued and picked up by a different pool, where it may be partially or fully executed
+   more than once.
+2. If a pool becomes disconnected, it will be considered stale and its jobs will be requeued and reclaimed
+   by a different pool. However, if the stale pool is able to partly or fully execute jobs without a reliable
+   internet connection, any jobs belonging to the stale pool might be executed more than once. You can increase
+   the [StaleTimeout](https://godoc.org/github.com/albrow/jobs#PoolConfig) parameter for a pool to make this
+   scenario less likely.
 
 
 License

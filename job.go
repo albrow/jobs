@@ -93,7 +93,7 @@ func (j *Job) nextTime() int64 {
 }
 
 // save writes the job to the database and adds it to the appropriate indexes and status
-// sets, but does not enqueue it. If you want to add it to the queue, use the Enqueue method
+// sets, but does not enqueue it. If you want to add it to the queue, use the enqueue method
 // after save.
 func (j *Job) save() error {
 	t := newTransaction()
@@ -143,12 +143,31 @@ func (j *Job) Refresh() error {
 	return nil
 }
 
-// Enqueue adds the job to the queue and sets its status to StatusQueued. Queued jobs will
+// enqueue adds the job to the queue and sets its status to StatusQueued. Queued jobs will
 // be completed by workers in order of priority.
-func (j *Job) Enqueue() error {
+func (j *Job) enqueue() error {
 	if err := j.setStatus(StatusQueued); err != nil {
 		return err
 	}
+	return nil
+}
+
+// Reschedule reschedules the job with the given time. It can be used to reschedule
+// cancelled jobs. It may also be used to reschedule finished or failed jobs, however,
+// in most cases if you want to reschedule finished jobs you should use the ScheduleRecurring
+// method and if you want to reschedule failed jobs, you should set the number of retries > 0
+// when registering the job type. Reschedule returns an error if there was a problem connecting
+// to the database.
+func (j *Job) Reschedule(time time.Time) error {
+	t := newTransaction()
+	unixNanoTime := time.UTC().UnixNano()
+	t.command("HSET", redis.Args{j.key(), "time", unixNanoTime}, nil)
+	t.setStatus(j, StatusQueued)
+	if err := t.exec(); err != nil {
+		return err
+	}
+	j.time = unixNanoTime
+	j.status = StatusQueued
 	return nil
 }
 

@@ -50,7 +50,7 @@ func TestGetNextJobs(t *testing.T) {
 	if err := highPriorityJob.save(); err != nil {
 		t.Errorf("Unexpected error saving test job: %s", err.Error())
 	}
-	if err := highPriorityJob.Enqueue(); err != nil {
+	if err := highPriorityJob.enqueue(); err != nil {
 		t.Errorf("Unexpected error enqueuing test job: %s", err.Error())
 	}
 
@@ -65,7 +65,7 @@ func TestGetNextJobs(t *testing.T) {
 		if err := job.save(); err != nil {
 			t.Errorf("Unexpected error saving test job: %s", err.Error())
 		}
-		if err := job.Enqueue(); err != nil {
+		if err := job.enqueue(); err != nil {
 			t.Errorf("Unexpected error enqueuing test job: %s", err.Error())
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestJobSave(t *testing.T) {
@@ -82,7 +83,7 @@ func TestJobRefresh(t *testing.T) {
 	}
 }
 
-func TestJobEnqueue(t *testing.T) {
+func TestJobenqueue(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
@@ -91,14 +92,14 @@ func TestJobEnqueue(t *testing.T) {
 	statePaths := []statePath{
 		{
 			steps: []func(*Job) error{
-				// Just call Enqueue after creating a new job
+				// Just call enqueue after creating a new job
 				enqueueJob,
 			},
 			expected: StatusQueued,
 		},
 		{
 			steps: []func(*Job) error{
-				// Call Enqueue, then Cancel, then Enqueue again
+				// Call enqueue, then Cancel, then enqueue again
 				enqueueJob,
 				cancelJob,
 				enqueueJob,
@@ -125,12 +126,51 @@ func TestJobCancel(t *testing.T) {
 		},
 		{
 			steps: []func(*Job) error{
-				// Call Cancel, then Enqueue, then Cancel again
+				// Call Cancel, then enqueue, then Cancel again
 				cancelJob,
 				enqueueJob,
 				cancelJob,
 			},
 			expected: StatusCancelled,
+		},
+	}
+	testJobStatePaths(t, statePaths)
+}
+
+func TestJobReschedule(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	// Create and save a new job, then make sure that the time
+	// parameter is set correctly when we call reschedule.
+	job, err := createAndSaveTestJob()
+	if err != nil {
+		t.Errorf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
+	}
+	currentTime := time.Now()
+	unixNanoTime := currentTime.UTC().UnixNano()
+	if err := job.Reschedule(currentTime); err != nil {
+		t.Errorf("Unexpected error in job.Reschedule: %s", err.Error())
+	}
+	expectJobFieldEquals(t, job, "time", unixNanoTime, int64Converter)
+
+	// Run through a set of possible state paths and make sure the result is
+	// always what we expect
+	statePaths := []statePath{
+		{
+			steps: []func(*Job) error{
+				// Just call Reschedule after creating a new job
+				rescheduleJob,
+			},
+			expected: StatusQueued,
+		},
+		{
+			steps: []func(*Job) error{
+				// Call Cancel, then reschedule
+				cancelJob,
+				rescheduleJob,
+			},
+			expected: StatusQueued,
 		},
 	}
 	testJobStatePaths(t, statePaths)
@@ -205,13 +245,16 @@ type statePath struct {
 var (
 	// Some easy to use step functions
 	enqueueJob = func(j *Job) error {
-		return j.Enqueue()
+		return j.enqueue()
 	}
 	cancelJob = func(j *Job) error {
 		return j.Cancel()
 	}
 	destroyJob = func(j *Job) error {
 		return j.Destroy()
+	}
+	rescheduleJob = func(j *Job) error {
+		return j.Reschedule(time.Now())
 	}
 )
 

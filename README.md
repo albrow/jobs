@@ -49,14 +49,19 @@ which sends a welcome email to users:
 
 ``` go
 // We'll specify that we want the job to be retried 3 times before finally failing
-welcomeEmailJobs, err := jobs.RegisterType("welcomeEmail", 3, func(user *User) {
+welcomeEmailJobs, err := jobs.RegisterType("welcomeEmail", 3, func(user *User) error {
 	msg := fmt.Sprintf("Hello, %s! Thanks for signing up for foo.com.", user.Name)
 	if err := emails.Send(user.EmailAddress, msg); err != nil {
-		// Panics will be captured by a worker, triggering up to 3 retries
-		panic(err)
+		// The returned error will be captured by a worker, which will then log the error
+		// in the database and trigger up to 3 retries.
+		return err
 	}
 })
 ```
+
+The final argument to the RegisterType function is a [HandlerFunc](http://godoc.org/github.com/albrow/jobs#HandlerFunc)
+which will be executed when the job runs. HandlerFunc must be a function which accepts either
+zero or one arguments and returns an error.
 
 ### Scheduling a Job
 

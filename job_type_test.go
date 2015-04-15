@@ -17,9 +17,9 @@ func TestRegisterType(t *testing.T) {
 	// Make sure we can register a job type without error
 	testJobName := "testJob1"
 	testJobRetries := uint(3)
-	Type, err := RegisterType(testJobName, testJobRetries, func() {})
+	Type, err := RegisterType(testJobName, testJobRetries, noOpHandler)
 	if err != nil {
-		t.Errorf("Unexpected err registering job type: %s", err.Error())
+		t.Fatalf("Unexpected err registering job type: %s", err.Error())
 	}
 	// Make sure the name property is correct
 	if Type.name != testJobName {
@@ -34,19 +34,19 @@ func TestRegisterType(t *testing.T) {
 		t.Errorf("Type was not added to the global map of job types.")
 	}
 	// Make sure we cannot register a job type with the same name
-	if _, err := RegisterType(testJobName, 0, func() {}); err == nil {
+	if _, err := RegisterType(testJobName, 0, noOpHandler); err == nil {
 		t.Errorf("Expected error when registering job with the same name but got none")
 	} else if _, ok := err.(ErrorNameAlreadyRegistered); !ok {
 		t.Errorf("Expected ErrorNameAlreadyRegistered but got error of type %T", err)
 	}
 	// Make sure we can register a job type with a handler function that has an argument
-	if _, err := RegisterType("testJobWithArg", 0, func(s string) { print(s) }); err != nil {
+	if _, err := RegisterType("testJobWithArg", 0, func(s string) error { print(s); return nil }); err != nil {
 		t.Errorf("Unexpected err registering job type with handler with one argument: %s", err)
 	}
 	// Make sure we cannot register a job type with an invalid handler
 	invalidHandlers := []interface{}{
 		"notAFunc",
-		func(a, b string) {},
+		func(a, b string) error { return nil },
 	}
 	for _, handler := range invalidHandlers {
 		if _, err := RegisterType("testJobWithInvalidHandler", 0, handler); err == nil {
@@ -68,9 +68,9 @@ func TestTypeSchedule(t *testing.T) {
 		t.Errorf("Unexpected error encoding data: %s", err)
 	}
 	encodedTime := testJobTime.UTC().UnixNano()
-	Type, err := RegisterType(testJobName, 0, func(string) {})
+	Type, err := RegisterType(testJobName, 0, func(string) error { return nil })
 	if err != nil {
-		t.Errorf("Unexpected error registering job type: %s", err)
+		t.Fatalf("Unexpected error registering job type: %s", err)
 	}
 	// Call Schedule
 	job, err := Type.Schedule(testJobPriority, testJobTime, testJobData)

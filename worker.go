@@ -43,14 +43,8 @@ func (w *worker) doJob(job *Job) {
 			} else {
 				msg = fmt.Sprint(r)
 			}
-			// Start a new transaction
-			t := newTransaction()
-			// Set the job error field
-			t.command("HSET", redis.Args{job.key(), "error", msg}, nil)
-			// Either queue the job for retry or mark it as failed depending
-			// on how many retries the job has left
-			t.retryOrFailJob(job, nil)
-			if err := t.exec(); err != nil {
+			if err := setJobError(job, msg); err != nil {
+				// Nothing left to do but panic
 				panic(err)
 			}
 		}
@@ -60,8 +54,11 @@ func (w *worker) doJob(job *Job) {
 	t0 := newTransaction()
 	t0.command("HSET", redis.Args{job.key(), "started", job.started}, nil)
 	if err := t0.exec(); err != nil {
-		// NOTE: panics will be caught by the recover statment above
-		panic(err)
+		if err := setJobError(job, err.Error()); err != nil {
+			// NOTE: panics will be caught by the recover statment above
+			panic(err)
+		}
+		return
 	}
 	// Use reflection to instantiate arguments for the handler
 	handlerArgs := []reflect.Value{}
@@ -69,14 +66,26 @@ func (w *worker) doJob(job *Job) {
 		// Instantiate a new variable to hold this argument
 		dataVal := reflect.New(job.typ.dataType)
 		if err := decode(job.data, dataVal.Interface()); err != nil {
-			// NOTE: panics will be caught by the recover statment above
-			panic(err)
+			if err := setJobError(job, err.Error()); err != nil {
+				// NOTE: panics will be caught by the recover statment above
+				panic(err)
+			}
+			return
 		}
 		handlerArgs = append(handlerArgs, dataVal.Elem())
 	}
 	// Call the handler using the arguments we just instantiated
 	handlerVal := reflect.ValueOf(job.typ.handler)
-	handlerVal.Call(handlerArgs)
+	returnVals := handlerVal.Call(handlerArgs)
+	// Check if the error return value was nil
+	if !returnVals[0].IsNil() {
+		err := returnVals[0].Interface().(error)
+		if err := setJobError(job, err.Error()); err != nil {
+			// NOTE: panics will be caught by the recover statment above
+			panic(err)
+		}
+		return
+	}
 	// Set the finished timestamp
 	job.finished = time.Now().UTC().UnixNano()
 	t1 := newTransaction()
@@ -92,7 +101,24 @@ func (w *worker) doJob(job *Job) {
 		t1.setStatus(job, StatusFinished)
 	}
 	if err := t1.exec(); err != nil {
-		// NOTE: panics will be caught by the recover statment above
-		panic(err)
+		if err := setJobError(job, err.Error()); err != nil {
+			// NOTE: panics will be caught by the recover statment above
+			panic(err)
+		}
+		return
 	}
+}
+
+func setJobError(job *Job, msg string) error {
+	// Start a new transaction
+	t := newTransaction()
+	// Set the job error field
+	t.command("HSET", redis.Args{job.key(), "error", msg}, nil)
+	// Either queue the job for retry or mark it as failed depending
+	// on how many retries the job has left
+	t.retryOrFailJob(job, nil)
+	if err := t.exec(); err != nil {
+		return err
+	}
+	return nil
 }

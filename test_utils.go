@@ -46,11 +46,14 @@ func flushdb() {
 	}
 }
 
+// noOpHandler is a HandlerFunc that simply does nothing
+var noOpHandler = func() error { return nil }
+
 // createTestJob creates and returns a job that can be used for testing.
 func createTestJob() (*Job, error) {
 	// Register the "testType"
 	TypeName := "testType"
-	Type, err := RegisterType(TypeName, 0, func() {})
+	Type, err := RegisterType(TypeName, 0, noOpHandler)
 	if err != nil {
 		if _, ok := err.(ErrorNameAlreadyRegistered); !ok {
 			// If the name was already registered, that's fine.
@@ -75,7 +78,7 @@ func createTestJob() (*Job, error) {
 func createTestJobs(n int) ([]*Job, error) {
 	// Register the "testType"
 	TypeName := "testType"
-	Type, err := RegisterType(TypeName, 0, func() {})
+	Type, err := RegisterType(TypeName, 0, noOpHandler)
 	if err != nil {
 		if _, ok := err.(ErrorNameAlreadyRegistered); !ok {
 			// If the name was already registered, that's fine.

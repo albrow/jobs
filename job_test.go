@@ -18,7 +18,7 @@ func TestJobSave(t *testing.T) {
 	// Create and save a test job
 	job, err := createTestJob()
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	job.started = 1
 	job.finished = 5
@@ -54,7 +54,7 @@ func TestJobRefresh(t *testing.T) {
 	// Create and save a job
 	job, err := createAndSaveTestJob()
 	if err != nil {
-		t.Errorf("Unexpected error: %s")
+		t.Fatalf("Unexpected error: %s", err)
 	}
 
 	// Get a copy of that job directly from database
@@ -145,7 +145,7 @@ func TestJobReschedule(t *testing.T) {
 	// parameter is set correctly when we call reschedule.
 	job, err := createAndSaveTestJob()
 	if err != nil {
-		t.Errorf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
+		t.Fatalf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
 	}
 	currentTime := time.Now()
 	unixNanoTime := currentTime.UTC().UnixNano()
@@ -226,7 +226,7 @@ func TestJobSetError(t *testing.T) {
 
 	job, err := createAndSaveTestJob()
 	if err != nil {
-		t.Errorf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
+		t.Fatalf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
 	}
 	testErr := errors.New("Test Error")
 	if err := job.setError(testErr); err != nil {
@@ -269,7 +269,7 @@ func testJobStatePaths(t *testing.T, statePaths []statePath) {
 		// Create a new test job
 		job, err := createAndSaveTestJob()
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		// Run the job through each step
 		for _, step := range statePath.steps {
@@ -286,7 +286,7 @@ func TestScanJob(t *testing.T) {
 	defer testingTeardown()
 	job, err := createAndSaveTestJob()
 	if err != nil {
-		t.Errorf("Unexpected error: %s")
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	conn := redisPool.Get()
 	defer conn.Close()

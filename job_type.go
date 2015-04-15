@@ -37,6 +37,12 @@ func newErrorNameAlreadyRegistered(name string) ErrorNameAlreadyRegistered {
 	return ErrorNameAlreadyRegistered{name: name}
 }
 
+// A HandlerFunc is a function which accepts ether zero or one arguments and returns an error.
+// The function will be executed by a worker. If the function returns a non-nil error or causes
+// a panic, the worker will capture and log the error, and if applicable the job may be queued
+// for retry.
+type HandlerFunc interface{}
+
 // RegisterType registers a new type of job that can be executed by workers.
 // name should be a unique string identifier for the job.
 // retries is the number of times this type of job should be retried if it fails.
@@ -45,7 +51,7 @@ func newErrorNameAlreadyRegistered(name string) ErrorNameAlreadyRegistered {
 // corresponding to the data for a job of this type. All jobs of this type must have
 // data with the same type as the first argument to handler, or nil if the handler
 // accepts no arguments.
-func RegisterType(name string, retries uint, handler interface{}) (*Type, error) {
+func RegisterType(name string, retries uint, handler HandlerFunc) (*Type, error) {
 	// Make sure name is unique
 	if _, found := Types[name]; found {
 		return Types[name], newErrorNameAlreadyRegistered(name)
@@ -58,6 +64,12 @@ func RegisterType(name string, retries uint, handler interface{}) (*Type, error)
 	if handlerType.NumIn() > 1 {
 		return nil, fmt.Errorf("jobs: in RegisterNewType, handler must accept 0 or 1 arguments. Got %d.", handlerType.NumIn())
 	}
+	if handlerType.NumOut() != 1 {
+		return nil, fmt.Errorf("jobs: in RegisterNewType, handler must have exactly one return value. Got %d.", handlerType.NumOut())
+	}
+	if !typeIsError(handlerType.Out(0)) {
+		return nil, fmt.Errorf("jobs: in RegisterNewType, handler must return an error. Got return value of type %s.", handlerType.Out(0).String())
+	}
 	Type := &Type{
 		name:    name,
 		handler: handler,
@@ -68,6 +80,12 @@ func RegisterType(name string, retries uint, handler interface{}) (*Type, error)
 	}
 	Types[name] = Type
 	return Type, nil
+}
+
+var errorType = reflect.TypeOf(make([]error, 1)).Elem()
+
+func typeIsError(typ reflect.Type) bool {
+	return typ.Implements(errorType)
 }
 
 // String satisfies the Stringer interface and returns the name of the Type.

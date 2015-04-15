@@ -5,7 +5,7 @@ A persistent and flexible background jobs library for go.
 
 [![GoDoc](https://godoc.org/github.com/albrow/jobs?status.svg)](https://godoc.org/github.com/albrow/jobs)
 
-Version: 0.1.1
+Version: 0.2.0
 
 Jobs is powered by redis and supports the following features:
 
@@ -18,9 +18,9 @@ Jobs is powered by redis and supports the following features:
    case scenarios. (See the [Guarantees](#guarantees) section below)
  - Work on jobs can be spread amongst any number of concurrent workers accross any
    number of machines.
- - Every job will be executed *at least* once, and in all but the most extreme
-   cases will be executed *exactly* once. (See the [Guarantees](#guarantees)
-   section below)
+ - Provided it is persisted to disk, every job will be executed *at least* once,
+ 	and in ideal network conditions will be executed *exactly* once. (See the
+ 	[Guarantees](#guarantees) section below)
  - You can query the database to find out e.g. the number of jobs that are
    currently executing or how long a particular job took to execute.
  - Any job that permanently fails will have its error captured and stored.
@@ -49,14 +49,19 @@ which sends a welcome email to users:
 
 ``` go
 // We'll specify that we want the job to be retried 3 times before finally failing
-welcomeEmailJobs, err := jobs.RegisterType("welcomeEmail", 3, func(user *User) {
+welcomeEmailJobs, err := jobs.RegisterType("welcomeEmail", 3, func(user *User) error {
 	msg := fmt.Sprintf("Hello, %s! Thanks for signing up for foo.com.", user.Name)
 	if err := emails.Send(user.EmailAddress, msg); err != nil {
-		// Panics will be captured by a worker, triggering up to 3 retries
-		panic(err)
+		// The returned error will be captured by a worker, which will then log the error
+		// in the database and trigger up to 3 retries.
+		return err
 	}
 })
 ```
+
+The final argument to the RegisterType function is a [HandlerFunc](http://godoc.org/github.com/albrow/jobs#HandlerFunc)
+which will be executed when the job runs. HandlerFunc must be a function which accepts either
+zero or one arguments and returns an error.
 
 ### Scheduling a Job
 
@@ -80,8 +85,8 @@ or ScheduleRecurring to check on the status of the job or cancel it manually.
 You can schedule any number of worker pools accross any number of machines, provided every machine
 agrees on the definition of the job types. If you want, you can start a worker pool on the same
 machines that are scheduling jobs, or you can have each worker pool running on a designated machine.
-It is technically safe to start multiple pools on a single machine, but typically you should only start
-one pool per machine.
+It is technically safe to start multiple pools on a single machine, but typically there is no reason
+to and you should only start one pool per machine.
 
 To create a new pool with the [default configuration](http://godoc.org/github.com/albrow/jobs#pkg-variables),
 just pass in nil:
@@ -135,8 +140,8 @@ Since jobs is powered by redis, there is a chance that you can lose data with th
 To get the best persistence guarantees, you should set redis to use both AOF and RDB persistence modes and set
 fsync to "always". With these settings, redis is more or less
 [as persistent as a database like postgres](http://redis.io/topics/persistence#ok-so-what-should-i-use). If want
-better performance and are okay with a greater (but still very small) chance of losing data, you can set fsync
-to "everysec".
+better performance and are okay with a slightly greater chance of losing data (i.e. jobs not executing), you can
+set fsync to "everysec".
 
 [Read more about redis persistence](http://redis.io/topics/persistence).
 
@@ -147,7 +152,7 @@ If redis crashes in the middle of a transaction or script execution, it is possi
 corrupted. If this happens, redis will refuse to start until the AOF file is fixed. It is relatively easy to fix
 the problem with the redis-check-aof tool, which will remove the partial transaction from the AOF file. In effect,
 this guarantees that modifications of the database are atomic, even in the event of a power loss or hard reset,
-with the caveat that you may need to break out the redis-check-aof tool in the worst case scenario.
+with the caveat that you may need to use the redis-check-aof tool in the worst case scenario.
 
 Read more about redis [transactions](http://redis.io/topics/transactions) and
 [scripts](http://redis.io/commands#scripting).
@@ -161,7 +166,8 @@ by one worker at a time becuase the jobs are delegated to workers via a shared c
 the health of all the other poools when it starts. If a pool crashes or is otherwise disconnected, any jobs it had
 grabbed from the database that did not yet finish will be requeued and picked up by a different pool.
 
-There are two known ways that a job may be executed more than once:
+This is in no way an exhaustive list, but here are some known examples of scenarios that may cause a job to be
+executed more than once:
 
 1. If there is a power failure or hard reset while a worker is in the middle of executing a job, the job may be
    stuck in a half-executed state. Since there is no way to know how much of the job was successfully completed,

@@ -74,9 +74,9 @@ func TestRetryOrFailJobScript(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
-	testJob, err := RegisterType("testJob", 0, func() {})
+	testJob, err := RegisterType("testJob", 0, noOpHandler)
 	if err != nil {
-		t.Errorf("Unexpected error registering job type: %s", err.Error())
+		t.Fatalf("Unexpected error registering job type: %s", err.Error())
 	}
 
 	// We'll use table-driven tests here
@@ -144,7 +144,7 @@ func TestSetStatusScript(t *testing.T) {
 
 	job, err := createAndSaveTestJob()
 	if err != nil {
-		t.Errorf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
+		t.Fatalf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
 	}
 
 	// For all possible statuses, execute the script and check that the job status was set correctly
@@ -170,7 +170,7 @@ func TestDestroyJobScript(t *testing.T) {
 
 	job, err := createAndSaveTestJob()
 	if err != nil {
-		t.Errorf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
+		t.Fatalf("Unexpected error in createAndSaveTestJob(): %s", err.Error())
 	}
 
 	// Execute the script to destroy the job
@@ -189,9 +189,9 @@ func TestPurgeStalePoolScript(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
-	testType, err := RegisterType("testType", 0, func() {})
+	testType, err := RegisterType("testType", 0, noOpHandler)
 	if err != nil {
-		t.Errorf("Unexpected error in RegisterType(): %s", err.Error())
+		t.Fatalf("Unexpected error in RegisterType(): %s", err.Error())
 	}
 
 	// Set up the database. We'll put some jobs in the executing set with a stale poolId,
@@ -257,7 +257,7 @@ func TestGetJobsByIdsScript(t *testing.T) {
 	// Create and save some jobs
 	jobs, err := createAndSaveTestJobs(5)
 	if err != nil {
-		t.Errorf("Unexpected error in createAndSaveTestJobs: %s", err.Error())
+		t.Fatalf("Unexpected error in createAndSaveTestJobs: %s", err.Error())
 	}
 
 	// Execute the script to get the jobs we just created

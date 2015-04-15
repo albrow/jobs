@@ -14,7 +14,7 @@ func TestStatusCount(t *testing.T) {
 	defer testingTeardown()
 	jobs, err := createAndSaveTestJobs(5)
 	if err != nil {
-		t.Errorf("Unexpected error: %s")
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	for _, status := range possibleStatuses {
 		if status == StatusDestroyed {
@@ -39,7 +39,7 @@ func TestStatusJobIds(t *testing.T) {
 	defer testingTeardown()
 	jobs, err := createAndSaveTestJobs(5)
 	if err != nil {
-		t.Errorf("Unexpected error: %s")
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	jobIds := make([]string, len(jobs))
 	for i, job := range jobs {
@@ -71,7 +71,7 @@ func TestStatusJobs(t *testing.T) {
 	defer testingTeardown()
 	jobs, err := createAndSaveTestJobs(5)
 	if err != nil {
-		t.Errorf("Unexpected error: %s")
+		t.Fatalf("Unexpected error: %s", err)
 	}
 	for _, status := range possibleStatuses {
 		if status == StatusDestroyed {

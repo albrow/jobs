@@ -16,7 +16,7 @@ Jobs is powered by redis and supports the following features:
  - A job can be retried a specified number of times if it fails.
  - A job is persistent, with protections against power loss and other worst
    case scenarios. (See the [Guarantees](#guarantees) section below)
- - Work on jobs can be spread amongst any number of concurrent workers accross any
+ - Work on jobs can be spread amongst any number of concurrent workers across any
    number of machines.
  - Provided it is persisted to disk, every job will be executed *at least* once,
  	and in ideal network conditions will be executed *exactly* once. (See the
@@ -82,7 +82,7 @@ or ScheduleRecurring to check on the status of the job or cancel it manually.
 
 ### Starting and Configuring Worker Pools
 
-You can schedule any number of worker pools accross any number of machines, provided every machine
+You can schedule any number of worker pools across any number of machines, provided every machine
 agrees on the definition of the job types. If you want, you can start a worker pool on the same
 machines that are scheduling jobs, or you can have each worker pool running on a designated machine.
 It is technically safe to start multiple pools on a single machine, but typically there is no reason
@@ -159,21 +159,21 @@ Read more about redis [transactions](http://redis.io/topics/transactions) and
 
 ### Job Execution
 
-Jobs gaurantees that a job will be executed *at least* once, provided it has been persisted on disk. (See the section
-on [Persistence](#persistence) directly above). A job can only picked up by one pool at a time becuase a pool
+Jobs guarantees that a job will be executed *at least* once, provided it has been persisted on disk. (See the section
+on [Persistence](#persistence) directly above). A job can only picked up by one pool at a time because a pool
 atomically pops (gets and immediately moves) the next available jobs from the database. A job can only be executed
-by one worker at a time becuase the jobs are delegated to workers via a shared channel. Each worker pool checks on
-the health of all the other poools when it starts. If a pool crashes or is otherwise disconnected, any jobs it had
-grabbed from the database that did not yet finish will be requeued and picked up by a different pool.
+by one worker at a time because the jobs are delegated to workers via a shared channel. Each worker pool checks on
+the health of all the other pools when it starts. If a pool crashes or is otherwise disconnected, any jobs it had
+grabbed from the database that did not yet finish will be re-queued and picked up by a different pool.
 
 This is in no way an exhaustive list, but here are some known examples of scenarios that may cause a job to be
 executed more than once:
 
 1. If there is a power failure or hard reset while a worker is in the middle of executing a job, the job may be
    stuck in a half-executed state. Since there is no way to know how much of the job was successfully completed,
-   the job will be requeued and picked up by a different pool, where it may be partially or fully executed
+   the job will be re-queued and picked up by a different pool, where it may be partially or fully executed
    more than once.
-2. If a pool becomes disconnected, it will be considered stale and its jobs will be requeued and reclaimed
+2. If a pool becomes disconnected, it will be considered stale and its jobs will be re-queued and reclaimed
    by a different pool. However, if the stale pool is able to partly or fully execute jobs without a reliable
    internet connection, any jobs belonging to the stale pool might be executed more than once. You can increase
    the [StaleTimeout](https://godoc.org/github.com/albrow/jobs#PoolConfig) parameter for a pool to make this

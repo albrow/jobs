@@ -68,6 +68,32 @@ file.
 Quickstart Guide
 ----------------
 
+### Connecting to Redis
+
+You can configure the connection to Redis by editing Config.Db. Here are the options:
+
+- Address is the address of the redis database to connect to. Default is
+  "localhost:6379".
+- Network is the type of network to use to connect to the redis database
+Default is "tcp".
+- Database is the redis database number to use for storing all data. Default
+  is 0.
+- Password is a password to use for connecting to a redis database via the
+  AUTH command. If empty, Jobs will not attempt to authenticate. Default is
+  "" (an empty string).
+
+You should edit Config.Db during program initialization, before running Pool.Start
+or scheduling any jobs. Here's an example of how to configure Jobs to use databse #10
+and authenticate with the password "foobar":
+
+``` go
+func main() {
+	// Configure database options at the start of your application
+	jobs.Config.Db.Database = 10
+	jobs.Config.Db.Password = "foobar"
+}
+```
+
 ### Registering Job Types
 
 Jobs must be organized into discrete types. Here's an example of how to register a job

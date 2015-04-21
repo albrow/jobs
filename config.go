@@ -22,6 +22,10 @@ type databaseConfig struct {
 	// Database is the redis database number to use for storing all data. Default
 	// is 0.
 	Database int
+	// Password is a password to use for connecting to a redis database via the
+	// AUTH command. If empty, Jobs will not attempt to authenticate. Default is
+	// "" (an empty string).
+	Password string
 }
 
 // Config is where all configuration variables are stored. You may modify Config
@@ -32,5 +36,6 @@ var Config = configType{
 		Address:  "localhost:6379",
 		Network:  "tcp",
 		Database: 0,
+		Password: "",
 	},
 }

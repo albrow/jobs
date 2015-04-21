@@ -20,6 +20,14 @@ var redisPool = &redis.Pool{
 		if err != nil {
 			return nil, err
 		}
+		// If a password was provided, use the AUTH command to authenticate
+		if Config.Db.Password != "" {
+			_, err = c.Do("AUTH", Config.Db.Password)
+			if err != nil {
+				return nil, err
+			}
+		}
+		// Connect to the appropriate database with SELECT
 		if _, err := c.Do("SELECT", Config.Db.Database); err != nil {
 			c.Close()
 			return nil, err

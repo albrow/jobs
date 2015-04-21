@@ -5,9 +5,9 @@ A persistent and flexible background jobs library for go.
 
 [![GoDoc](https://godoc.org/github.com/albrow/jobs?status.svg)](https://godoc.org/github.com/albrow/jobs)
 
-Version: 0.2.0
+Version: 0.2.1
 
-Jobs is powered by redis and supports the following features:
+Jobs is powered by Redis and supports the following features:
 
  - A job can encapsulate any arbitrary functionality. A job can do anything
    which can be done in a go function.
@@ -35,12 +35,64 @@ execute before rendering a response. A good example is sending a welcome email t
 after they sign up. You can use Jobs to schedule the email to be sent asynchronously, and
 render a response to your user without waiting for the email to be sent. You could use a
 goroutine to accomplish the same thing, but in the event of a server restart or power loss,
-the email might never be sent. Jobs guarantees that the email will be sent at some time,
+the email might never be sent. Jobs guarantees that the email will be sent at some time
 and allows you to spread the work between different machines.
+
+
+Installation
+------------
+
+Jobs requires Go version >= 1.2. If you do not already have it, follow these instructions: 
+
+- [Install Go](http://golang.org/doc/install)
+- Follow the instructions for [setting up your go workspace](https://golang.org/doc/code.html)
+
+Jobs requires access to a Redis database. If you plan to have multiple worker pools spread
+out accross different machines, they should all connect to the same Redis database. If you
+only want to run one worker pool, it is safe to install Redis locally and run it on the same
+machine. In either case, if you need to install Redis, follow these instructions:
+
+- [Install Redis](http://redis.io/download).
+- Follow the instructions in the section called
+  [Installing Redis more properly](http://redis.io/topics/quickstart#installing-redis-more-properly).
+- Make sure you understand how [Redis Persistence](http://redis.io/topics/persistence) works and have
+  edited your config file to get your desired persistence. I recommend using both RDB and AOF and setting
+  fsync to either "always" or "everysec". 
+
+After that, you can install Jobs like you would any other go package: `go get github.com/albrow/jobs`.
+If you want to update the package later, use `go get -u github.com/albrow/jobs`. Then you can import
+Jobs like you would any other go package by adding `import github.com/albrow/jobs` to your go source
+file.
 
 
 Quickstart Guide
 ----------------
+
+### Connecting to Redis
+
+You can configure the connection to Redis by editing Config.Db. Here are the options:
+
+- Address is the address of the redis database to connect to. Default is
+  "localhost:6379".
+- Network is the type of network to use to connect to the redis database
+Default is "tcp".
+- Database is the redis database number to use for storing all data. Default
+  is 0.
+- Password is a password to use for connecting to a redis database via the
+  AUTH command. If empty, Jobs will not attempt to authenticate. Default is
+  "" (an empty string).
+
+You should edit Config.Db during program initialization, before running Pool.Start
+or scheduling any jobs. Here's an example of how to configure Jobs to use databse #10
+and authenticate with the password "foobar":
+
+``` go
+func main() {
+	// Configure database options at the start of your application
+	jobs.Config.Db.Database = 10
+	jobs.Config.Db.Password = "foobar"
+}
+```
 
 ### Registering Job Types
 
@@ -131,30 +183,71 @@ You can also call Close and Wait at any time to manually stop the pool from exec
 case, any jobs that are currently being executed will still finish.
 
 
+Testing
+-------
+
+To run the tests, make sure you have Redis running and accepting unix socket connections on the address
+/tmp/redis.sock. The tests will use database #14. **WARNING:** After each test is run, database #14 will be completely
+erased, so make sure you do not have any important data stored there.
+
+To run the tests just run `go test .` If anything fails, please report an issue and describe what happened.
+
+
+Contributing
+------------
+
+Feedback, bug reports, and pull requests are greatly appreciated :)
+
+### Issues
+
+The following are all great reasons to submit an issue:
+
+1. You found a bug in the code.
+2. Something is missing from the documentation or the existing documentation is unclear.
+3. You have an idea for a new feature.
+
+If you are thinking about submitting an issue please remember to:
+
+1. Describe the issue in detail.
+2. If applicable, describe the steps to reproduce the error, which probably should include some example code.
+3. Mention details about your platform: OS, version of Go and Redis, etc.
+
+### Pull Requests
+
+Jobs uses semantic versioning and the [git branching model described here](http://nvie.com/posts/a-successful-git-branching-model/).
+If you plan on submitting a pull request, you should:
+
+1. Fork the repository.
+2. Create a new "feature branch" with a descriptive name (e.g. fix-database-error).
+3. Make your changes in the feature branch.
+4. Run the tests to make sure that they still pass. Updated the tests if needed.
+5. Submit a pull request to merge your feature branch into the *develop* branch. Please do not request to merge directly into master.
+
+
 Guarantees
 -----------
 
 ### Persistence
 
-Since jobs is powered by redis, there is a chance that you can lose data with the default redis configuration.
-To get the best persistence guarantees, you should set redis to use both AOF and RDB persistence modes and set
-fsync to "always". With these settings, redis is more or less
+Since jobs is powered by Redis, there is a chance that you can lose data with the default Redis configuration.
+To get the best persistence guarantees, you should set Redis to use both AOF and RDB persistence modes and set
+fsync to "always". With these settings, Redis is more or less
 [as persistent as a database like postgres](http://redis.io/topics/persistence#ok-so-what-should-i-use). If want
 better performance and are okay with a slightly greater chance of losing data (i.e. jobs not executing), you can
 set fsync to "everysec".
 
-[Read more about redis persistence](http://redis.io/topics/persistence).
+[Read more about Redis persistence](http://redis.io/topics/persistence).
 
 ### Atomicity
 
-Jobs is carefully written using redis transactions and lua scripting so that all database changes are atomic.
-If redis crashes in the middle of a transaction or script execution, it is possible that your AOF file can become
-corrupted. If this happens, redis will refuse to start until the AOF file is fixed. It is relatively easy to fix
+Jobs is carefully written using Redis transactions and lua scripting so that all database changes are atomic.
+If Redis crashes in the middle of a transaction or script execution, it is possible that your AOF file can become
+corrupted. If this happens, Redis will refuse to start until the AOF file is fixed. It is relatively easy to fix
 the problem with the redis-check-aof tool, which will remove the partial transaction from the AOF file. In effect,
 this guarantees that modifications of the database are atomic, even in the event of a power loss or hard reset,
 with the caveat that you may need to use the redis-check-aof tool in the worst case scenario.
 
-Read more about redis [transactions](http://redis.io/topics/transactions) and
+Read more about [Redis transactions](http://redis.io/topics/transactions) and
 [scripts](http://redis.io/commands#scripting).
 
 ### Job Execution

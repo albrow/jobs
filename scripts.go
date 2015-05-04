@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"text/template"
 	"time"
+	"string"
 )
 
 var (
@@ -48,7 +49,7 @@ var (
 )
 
 var (
-	scriptsPath = filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "albrow", "jobs", "scripts")
+	scriptsPath = filepath.Join(strings.Split(os.Getenv("GOPATH"), string(os.PathListSeparator))[0], "src", "github.com", "albrow", "jobs", "scripts")
 )
 
 func init() {

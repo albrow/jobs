@@ -9,9 +9,9 @@ import (
 	"github.com/garyburd/redigo/redis"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 	"time"
-	"strings"
 )
 
 var (
@@ -49,10 +49,11 @@ var (
 )
 
 var (
-	// Split GOPATH use os.PathListSeparator, choose first path in GOPATH as scripts path. 
-	// If not do that, got a open file error when multiple path in GOPATH.
-	scriptsPath = filepath.Join(strings.Split(os.Getenv("GOPATH"), string(os.PathListSeparator))[0], "src", "github.com", "albrow", "jobs", "scripts")
-))
+	// Split GOPATH using os.PathListSeparator and choose first path in GOPATH as scripts path.
+	// Otherwise you would receive an open file error if using multiple paths in your GOPATH.
+	gopath      = strings.Split(os.Getenv("GOPATH"), string(os.PathListSeparator))[0]
+	scriptsPath = filepath.Join(gopath, "src", "github.com", "albrow", "jobs", "scripts")
+)
 
 func init() {
 	// Parse all the script templates and create redis.Script objects

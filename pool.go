@@ -5,7 +5,9 @@
 package jobs
 
 import (
+	"fmt"
 	"github.com/garyburd/redigo/redis"
+	"net"
 	"runtime"
 	"sync"
 	"time"
@@ -84,16 +86,20 @@ var DefaultPoolConfig = &PoolConfig{
 // NewPool creates and returns a new pool with the given configuration. You can
 // pass in nil to use the default values. Otherwise, any zero values in config will
 // be interpreted as the default value.
-func NewPool(config *PoolConfig) *Pool {
+func NewPool(config *PoolConfig) (*Pool, error) {
 	finalConfig := getPoolConfig(config)
+	hardwareId, err := getHardwareId()
+	if err != nil {
+		return nil, err
+	}
 	return &Pool{
 		config:  finalConfig,
-		id:      generateRandomId(),
+		id:      hardwareId,
 		wg:      &sync.WaitGroup{},
 		exit:    make(chan bool),
 		workers: make([]*worker, finalConfig.NumWorkers),
 		jobs:    make(chan *Job, finalConfig.BatchSize),
-	}
+	}, nil
 }
 
 // getPoolConfig replaces any zero values in passedConfig with the default values.
@@ -145,6 +151,29 @@ func (p *Pool) removeFromPoolSet() error {
 		return err
 	}
 	return nil
+}
+
+// getHardwareId returns a unique identifier for the current machine. It does this
+// by iterating through the network interfaces of the machine and picking the first
+// one that has a non-empty hardware (MAC) address. MAC Addresses are guaranteed by
+// IEEE to be unique, however, they are also sometimes spoofable. Spoofed MAC addresses
+// are fine as long as no two machines in the job pool have the same MAC address.
+func getHardwareId() (string, error) {
+	inters, err := net.Interfaces()
+	if err != nil {
+		return "", fmt.Errorf("jobs: Unable to get network interfaces via net.Interfaces(). Does this machine have any network interfaces?\n%s", err.Error())
+	}
+	address := ""
+	for _, inter := range inters {
+		if inter.HardwareAddr.String() != "" {
+			address = inter.HardwareAddr.String()
+			break
+		}
+	}
+	if address == "" {
+		return "", fmt.Errorf("jobs: Unable to find a network interface with a non-empty hardware (MAC) address. Does this machine have any valid network interfaces?\n%s", err.Error())
+	}
+	return address, nil
 }
 
 // pingKey is the key for a pub/sub connection which allows a pool to ping, i.e.

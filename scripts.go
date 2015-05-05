@@ -9,6 +9,7 @@ import (
 	"github.com/garyburd/redigo/redis"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 	"time"
 )
@@ -48,7 +49,10 @@ var (
 )
 
 var (
-	scriptsPath = filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "albrow", "jobs", "scripts")
+	// Split GOPATH using os.PathListSeparator and choose first path in GOPATH as scripts path.
+	// Otherwise you would receive an open file error if using multiple paths in your GOPATH.
+	gopath      = strings.Split(os.Getenv("GOPATH"), string(os.PathListSeparator))[0]
+	scriptsPath = filepath.Join(gopath, "src", "github.com", "albrow", "jobs", "scripts")
 )
 
 func init() {

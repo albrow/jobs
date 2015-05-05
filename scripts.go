@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"text/template"
 	"time"
-	"string"
+	"strings"
 )
 
 var (
@@ -48,7 +48,9 @@ var (
 	getJobsByIdsScript   *redis.Script
 )
 
-var (
+var (	
+	// Split GOPATH use os.PathListSeparator, choose first path in GOPATH as scripts path. 
+	// If not do that, got a open file error when multiple path in GOPATH
 	scriptsPath = filepath.Join(strings.Split(os.Getenv("GOPATH"), string(os.PathListSeparator))[0], "src", "github.com", "albrow", "jobs", "scripts")
 )
 

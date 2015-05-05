@@ -137,8 +137,8 @@ or ScheduleRecurring to check on the status of the job or cancel it manually.
 You can schedule any number of worker pools across any number of machines, provided every machine
 agrees on the definition of the job types. If you want, you can start a worker pool on the same
 machines that are scheduling jobs, or you can have each worker pool running on a designated machine.
-It is technically safe to start multiple pools on a single machine, but typically there is no reason
-to and you should only start one pool per machine.
+Since each pool is assigned an id based on a unique hardware identifier, you must only run one
+worker pool per machine.
 
 To create a new pool with the [default configuration](http://godoc.org/github.com/albrow/jobs#pkg-variables),
 just pass in nil:

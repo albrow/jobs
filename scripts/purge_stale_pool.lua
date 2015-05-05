@@ -13,23 +13,27 @@
 
 -- Assign args to variables for easy reference
 local stalePoolId = ARGV[1]
--- Remove the stale pool from the set of active pools
-redis.call('SREM', '{{.activePoolsSet}}', stalePoolId)
--- Get all the jobs in the executing set
-local jobIds = redis.call('ZRANGE', '{{.executingSet}}', 0, -1)
-for i, jobId in ipairs(jobIds) do
-	local jobKey = 'jobs:' .. jobId
-	-- Check the poolId field
-	-- If the poolId is equal to the stale id, then this job is stuck
-	-- in the executing set even though no worker is actually executing it
-	local poolId = redis.call('HGET', jobKey, 'poolId')
-	if poolId == stalePoolId then
-		local jobPriority = redis.call('HGET', jobKey, 'priority')
-		-- Move the job into the queued set
-		redis.call('ZADD', '{{.queuedSet}}', jobPriority, jobId)
-		-- Remove the job from the executing set
-		redis.call('ZREM', '{{.executingSet}}', jobId)
-		-- Set the job status to queued and the pool id to blank
-		redis.call('HMSET', jobKey, 'status', '{{.statusQueued}}', 'poolId', '')
+-- Check if the stale pool is in the set of active pools first
+local isActive = redis.call('SISMEMBER', '{{.activePoolsSet}}', stalePoolId)
+if isActive then
+	-- Remove the stale pool from the set of active pools
+	redis.call('SREM', '{{.activePoolsSet}}', stalePoolId)
+	-- Get all the jobs in the executing set
+	local jobIds = redis.call('ZRANGE', '{{.executingSet}}', 0, -1)
+	for i, jobId in ipairs(jobIds) do
+		local jobKey = 'jobs:' .. jobId
+		-- Check the poolId field
+		-- If the poolId is equal to the stale id, then this job is stuck
+		-- in the executing set even though no worker is actually executing it
+		local poolId = redis.call('HGET', jobKey, 'poolId')
+		if poolId == stalePoolId then
+			local jobPriority = redis.call('HGET', jobKey, 'priority')
+			-- Move the job into the queued set
+			redis.call('ZADD', '{{.queuedSet}}', jobPriority, jobId)
+			-- Remove the job from the executing set
+			redis.call('ZREM', '{{.executingSet}}', jobId)
+			-- Set the job status to queued and the pool id to blank
+			redis.call('HMSET', jobKey, 'status', '{{.statusQueued}}', 'poolId', '')
+		end
 	end
 end

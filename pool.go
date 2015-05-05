@@ -319,11 +319,32 @@ func (p *Pool) respondToPings() error {
 	}
 }
 
+// removeStaleSelf will check if the current machine recently failed hard
+// (e.g. due to power failuer) by checking if p.id is in the set of active
+// pools. If p.id is still "active" according to the database, it means
+// there was a hard failure, and so removeStaleSelf then re-queues the
+// stale jobs. removeStaleSelf should only be run when the Pool is started.
+func (p *Pool) removeStaleSelf() error {
+	t := newTransaction()
+	t.purgeStalePool(p.id)
+	if err := t.exec(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Start starts the worker pool. This means the pool will initialize workers,
 // continuously query the database for queued jobs, and delegate those jobs
 // to the workers.
 func (p *Pool) Start() error {
-	// Do some bookkeeping related checking status of worker pools
+	// Purge stale jobs belonging to this pool if there was a recent
+	// hard failure
+	if err := p.removeStaleSelf(); err != nil {
+		return err
+	}
+
+	// Check on the status of other worker pools by pinging them and
+	// start the process to repond to pings from other pools
 	if err := p.addToPoolSet(); err != nil {
 		return err
 	}

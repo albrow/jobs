@@ -144,7 +144,10 @@ To create a new pool with the [default configuration](http://godoc.org/github.co
 just pass in nil:
 
 ``` go
-pool := jobs.NewPool(nil)
+pool, err := jobs.NewPool(nil)
+if err != nil {
+	// Handle err
+}
 ```
 
 You can also specify a different configuration by passing in
@@ -153,10 +156,13 @@ in will fallback to the default values. So here's how you could start a pool wit
 size of 10, while letting the other options remain the default.
 
 ``` go
-pool := jobs.NewPool(&jobs.PoolConfig{
+pool, err := jobs.NewPool(&jobs.PoolConfig{
 	NumWorkers: 10,
 	BatchSize: 10,
 })
+if err != nil {
+	// Handle err
+}
 ```
 
 After you have created a pool, you can start it with the Start method. Once started, the pool will
@@ -166,7 +172,10 @@ Wait in a defer statement. Typical usage looks something like this:
 
 ``` go
 func main() {
-	pool := jobs.NewPool(nil)
+	pool, err := jobs.NewPool(nil)
+	if err != nil {
+		// Handle err
+	}
 	defer func() {
 		pool.Close()
 		if err := pool.Wait(); err != nil {

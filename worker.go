@@ -52,7 +52,7 @@ func (w *worker) doJob(job *Job) {
 	// Set the started field and save the job
 	job.started = time.Now().UTC().UnixNano()
 	t0 := newTransaction()
-	t0.command("HSET", redis.Args{job.key(), "started", job.started}, nil)
+	t0.command("HSET", redis.Args{job.Key(), "started", job.started}, nil)
 	if err := t0.exec(); err != nil {
 		if err := setJobError(job, err.Error()); err != nil {
 			// NOTE: panics will be caught by the recover statment above
@@ -89,11 +89,11 @@ func (w *worker) doJob(job *Job) {
 	// Set the finished timestamp
 	job.finished = time.Now().UTC().UnixNano()
 	t1 := newTransaction()
-	t1.command("HSET", redis.Args{job.key(), "finished", job.finished}, nil)
-	if job.isRecurring() {
+	t1.command("HSET", redis.Args{job.Key(), "finished", job.finished}, nil)
+	if job.IsRecurring() {
 		// If the job is recurring, reschedule and set status to queued
-		job.time = job.nextTime()
-		t1.command("HSET", redis.Args{job.key(), "time", job.time}, nil)
+		job.time = job.NextTime()
+		t1.command("HSET", redis.Args{job.Key(), "time", job.time}, nil)
 		t1.addJobToTimeIndex(job)
 		t1.setStatus(job, StatusQueued)
 	} else {
@@ -113,7 +113,7 @@ func setJobError(job *Job, msg string) error {
 	// Start a new transaction
 	t := newTransaction()
 	// Set the job error field
-	t.command("HSET", redis.Args{job.key(), "error", msg}, nil)
+	t.command("HSET", redis.Args{job.Key(), "error", msg}, nil)
 	// Either queue the job for retry or mark it as failed depending
 	// on how many retries the job has left
 	t.retryOrFailJob(job, nil)

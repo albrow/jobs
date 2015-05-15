@@ -109,7 +109,7 @@ func TestRetryOrFailJobScript(t *testing.T) {
 		// Run the script and save the return value in a slice
 		tx.retryOrFailJob(tc.job, newScanBoolHandler(&(gotReturns[i])))
 		// Get the new number of retries from the database and save the value in a slice
-		tx.command("HGET", redis.Args{tc.job.key(), "retries"}, newScanIntHandler(&(gotRetries[i])))
+		tx.command("HGET", redis.Args{tc.job.Key(), "retries"}, newScanIntHandler(&(gotRetries[i])))
 	}
 	// Execute the transaction
 	if err := tx.exec(); err != nil {

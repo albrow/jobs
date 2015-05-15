@@ -136,7 +136,7 @@ func createAndSaveTestJobs(n int) ([]*Job, error) {
 func expectJobFieldEquals(t *testing.T, job *Job, fieldName string, expected interface{}, converter replyConverter) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	got, err := conn.Do("HGET", job.key(), fieldName)
+	got, err := conn.Do("HGET", job.Key(), fieldName)
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
@@ -306,7 +306,7 @@ func expectStatusEquals(t *testing.T, job *Job, expected Status) {
 // expectJobDestroyed sets an error via t.Errorf if job has not been destroyed.
 func expectJobDestroyed(t *testing.T, job *Job) {
 	// Make sure the main hash is gone
-	expectKeyNotExists(t, job.key())
+	expectKeyNotExists(t, job.Key())
 	expectJobNotInTimeIndex(t, job)
 	for _, status := range possibleStatuses {
 		expectJobNotInStatusSet(t, job, status)

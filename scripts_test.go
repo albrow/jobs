@@ -21,11 +21,11 @@ func TestPopNextJobsScript(t *testing.T) {
 	// Set up the database
 	tx0 := newTransaction()
 	// One set will mimic the ready and sorted jobs
-	tx0.command("ZADD", redis.Args{keys.jobsTimeIndex, pastTime, "two", pastTime, "four"}, nil)
+	tx0.command("ZADD", redis.Args{Keys.JobsTimeIndex, pastTime, "two", pastTime, "four"}, nil)
 	// One set will mimic the queued set
-	tx0.command("ZADD", redis.Args{StatusQueued.key(), 1, "one", 2, "two", 3, "three", 4, "four"}, nil)
+	tx0.command("ZADD", redis.Args{StatusQueued.Key(), 1, "one", 2, "two", 3, "three", 4, "four"}, nil)
 	// One set will mimic the executing set
-	tx0.command("ZADD", redis.Args{StatusExecuting.key(), 5, "five"}, nil)
+	tx0.command("ZADD", redis.Args{StatusExecuting.Key(), 5, "five"}, nil)
 	if err := tx0.exec(); err != nil {
 		t.Errorf("Unexpected error executing transaction: %s", err.Error())
 	}
@@ -52,7 +52,7 @@ func TestPopNextJobsScript(t *testing.T) {
 	conn := redisPool.Get()
 	defer conn.Close()
 	expectedExecuting := []string{"five", "four", "two"}
-	gotExecuting, err := redis.Strings(conn.Do("ZREVRANGE", StatusExecuting.key(), 0, -1))
+	gotExecuting, err := redis.Strings(conn.Do("ZREVRANGE", StatusExecuting.Key(), 0, -1))
 	if err != nil {
 		t.Errorf("Unexpected error in ZREVRANGE: %s", err.Error())
 	}
@@ -60,14 +60,14 @@ func TestPopNextJobsScript(t *testing.T) {
 		t.Errorf("Ids in the executing set were incorrect.\n\tExpected: %v\n\tBut got:  %v", expectedExecuting, gotExecuting)
 	}
 	expectedQueued := []string{"three", "one"}
-	gotQueued, err := redis.Strings(conn.Do("ZREVRANGE", StatusQueued.key(), 0, -1))
+	gotQueued, err := redis.Strings(conn.Do("ZREVRANGE", StatusQueued.Key(), 0, -1))
 	if err != nil {
 		t.Errorf("Unexpected error in ZREVRANGE: %s", err.Error())
 	}
 	if !reflect.DeepEqual(expectedQueued, gotQueued) {
 		t.Errorf("Ids in the queued set were incorrect.\n\tExpected: %v\n\tBut got:  %v", expectedQueued, gotQueued)
 	}
-	expectKeyNotExists(t, keys.jobsTemp)
+	expectKeyNotExists(t, Keys.JobsTemp)
 }
 
 func TestRetryOrFailJobScript(t *testing.T) {
@@ -177,7 +177,7 @@ func TestDestroyJobScript(t *testing.T) {
 	tx := newTransaction()
 	tx.destroyJob(job)
 	if err := tx.exec(); err != nil {
-		t.Error("Unexpected err in tx.exec(): %s", err.Error())
+		t.Errorf("Unexpected err in tx.exec(): %s", err.Error())
 	}
 
 	// Make sure the job was destroyed
@@ -218,7 +218,7 @@ func TestPurgeStalePoolScript(t *testing.T) {
 	// Add both pools to the set of active pools
 	conn := redisPool.Get()
 	defer conn.Close()
-	if _, err := conn.Do("SADD", keys.activePools, stalePoolId, activePoolId); err != nil {
+	if _, err := conn.Do("SADD", Keys.ActivePools, stalePoolId, activePoolId); err != nil {
 		t.Errorf("Unexpected error adding pools to set: %s", err)
 	}
 
@@ -226,13 +226,13 @@ func TestPurgeStalePoolScript(t *testing.T) {
 	tx := newTransaction()
 	tx.purgeStalePool(stalePoolId)
 	if err := tx.exec(); err != nil {
-		t.Error("Unexpected err in tx.exec(): %s", err.Error())
+		t.Errorf("Unexpected err in tx.exec(): %s", err.Error())
 	}
 
 	// Check the result
 	// The active pools set should contain only the activePoolId
-	expectSetDoesNotContain(t, keys.activePools, stalePoolId)
-	expectSetContains(t, keys.activePools, activePoolId)
+	expectSetDoesNotContain(t, Keys.ActivePools, stalePoolId)
+	expectSetContains(t, Keys.ActivePools, activePoolId)
 	// All the active jobs should still be executing
 	for _, job := range activeJobs {
 		if err := job.Refresh(); err != nil {
@@ -263,9 +263,9 @@ func TestGetJobsByIdsScript(t *testing.T) {
 	// Execute the script to get the jobs we just created
 	jobsCopy := []*Job{}
 	tx := newTransaction()
-	tx.getJobsByIds(StatusSaved.key(), newScanJobsHandler(&jobsCopy))
+	tx.getJobsByIds(StatusSaved.Key(), newScanJobsHandler(&jobsCopy))
 	if err := tx.exec(); err != nil {
-		t.Error("Unexpected err in tx.exec(): %s", err.Error())
+		t.Errorf("Unexpected err in tx.exec(): %s", err.Error())
 	}
 
 	// Check the result

@@ -38,6 +38,8 @@
 -- 	]
 -- ]
 
+-- IMPORTANT: If you edit this file, you must run go generate . to rewrite ../scripts.go
+
 -- Assign args to variables for easy reference
 local n = ARGV[1]
 local currentTime = ARGV[2]

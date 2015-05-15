@@ -9,6 +9,8 @@
 -- 	1) Adds the job to the new status set
 -- 	2) Removes the job from the old status set (which it gets with an HGET call)
 -- 	3) Sets the 'status' field in the main hash for the job
+
+-- IMPORTANT: If you edit this file, you must run go generate . to rewrite ../scripts.go
 	
 -- Assign args to variables for easy reference
 local jobId = ARGV[1]

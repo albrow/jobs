@@ -9,6 +9,8 @@
 -- 	2) Removes the job from the time index
 -- 	3) Removes the main hash for the job
 
+-- IMPORTANT: If you edit this file, you must run go generate . to rewrite ../scripts.go
+
 -- Assign args to variables for easy reference
 local jobId = ARGV[1]
 local jobKey = 'jobs:' .. jobId

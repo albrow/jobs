@@ -128,7 +128,7 @@ func (t *transaction) saveJob(job *Job) {
 // addJobToTimeIndex adds commands to the transaction which will, when executed,
 // add the job id to the time index with a score equal to the job's time field.
 func (t *transaction) addJobToTimeIndex(job *Job) {
-	t.command("ZADD", redis.Args{keys.jobsTimeIndex, job.time, job.id}, nil)
+	t.command("ZADD", redis.Args{Keys.JobsTimeIndex, job.time, job.id}, nil)
 }
 
 // Refresh mutates the job by setting its fields to the most recent data

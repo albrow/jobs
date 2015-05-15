@@ -29,12 +29,12 @@ func TestPoolIdSet(t *testing.T) {
 	if err := pool.Start(); err != nil {
 		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
 	}
-	expectSetContains(t, keys.activePools, pool.id)
+	expectSetContains(t, Keys.ActivePools, pool.id)
 	pool.Close()
 	if err := pool.Wait(); err != nil {
 		t.Errorf("Unexpected error in pool.Wait(): %s", err.Error())
 	}
-	expectSetDoesNotContain(t, keys.activePools, pool.id)
+	expectSetDoesNotContain(t, Keys.ActivePools, pool.id)
 }
 
 // TestGetNextJobs tests the getNextJobs function, which queries the database to find
@@ -684,10 +684,9 @@ func TestJobFailPanic(t *testing.T) {
 	testingSetUp()
 	defer testingTeardown()
 
-	// Register a job type which will do nothing but sleep for some duration
+	// Register a job type which immediately panic
 	panicJob, err := RegisterType("panicJob", 0, func(msg string) error {
 		panic(errors.New(msg))
-		return nil
 	})
 	if err != nil {
 		t.Fatalf("Unexpected error in RegisterType: %s", err.Error())
@@ -774,7 +773,6 @@ func TestRetryJob(t *testing.T) {
 		}
 		msg := fmt.Sprintf("job failed on the %s try", humanize.Ordinal(int(tries)))
 		panic(msg)
-		return nil
 	})
 	if err != nil {
 		t.Fatalf("Unexpected error in RegisterType: %s", err.Error())
@@ -892,7 +890,7 @@ func TestStalePoolsArePurged(t *testing.T) {
 	stalePool.Unlock()
 
 	// Create a conn we can use to listen for the stale pool to be pinged
-	ping := &redis.PubSubConn{redisPool.Get()}
+	ping := &redis.PubSubConn{Conn: redisPool.Get()}
 	if err := ping.Subscribe(oldPingKey); err != nil {
 		t.Errorf("Unexpected error in ping.Subscribe(): %s", err.Error())
 	}
@@ -948,7 +946,7 @@ func TestStalePoolsArePurged(t *testing.T) {
 	}
 
 	// At this point, the stale pool should have been fully purged.
-	expectSetDoesNotContain(t, keys.activePools, oldId)
+	expectSetDoesNotContain(t, Keys.ActivePools, oldId)
 	expectJobFieldEquals(t, job, "poolId", newPool.id, stringConverter)
 }
 

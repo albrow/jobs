@@ -11,6 +11,8 @@
 -- 	3) If it finds any such jobs, it removes them from the executing set and
 -- 		adds them to the queued so that they will be retried
 
+-- IMPORTANT: If you edit this file, you must run go generate . to rewrite ../scripts.go
+
 -- Assign args to variables for easy reference
 local stalePoolId = ARGV[1]
 -- Check if the stale pool is in the set of active pools first

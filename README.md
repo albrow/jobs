@@ -39,6 +39,19 @@ the email might never be sent. Jobs guarantees that the email will be sent at so
 and allows you to spread the work between different machines.
 
 
+Development Status
+------------------
+
+Jobs is being actively developed and is well-tested. However, since it is still a young library,
+it is not recommended for use in mission-critical production applications at this time. It is probably
+fine to use for low-traffic hobby sites, and in fact we encourage its use in those settings to help
+polish the API and find missing features and hidden bugs. Pull requests and issue reports are much
+appreciated :)
+
+Jobs follows semantic versioning but offers no guarantees of backwards compatibility until version
+1.0. Keep in mind that breaking changes might occur. We will do our best to make the community aware
+of any non-trivial breaking changes beforehand.
+
 Installation
 ------------
 
@@ -48,7 +61,7 @@ Jobs requires Go version >= 1.2. If you do not already have it, follow these ins
 - Follow the instructions for [setting up your go workspace](https://golang.org/doc/code.html)
 
 Jobs requires access to a Redis database. If you plan to have multiple worker pools spread
-out accross different machines, they should all connect to the same Redis database. If you
+out across different machines, they should all connect to the same Redis database. If you
 only want to run one worker pool, it is safe to install Redis locally and run it on the same
 machine. In either case, if you need to install Redis, follow these instructions:
 
@@ -56,7 +69,7 @@ machine. In either case, if you need to install Redis, follow these instructions
 - Follow the instructions in the section called
   [Installing Redis more properly](http://redis.io/topics/quickstart#installing-redis-more-properly).
 - Make sure you understand how [Redis Persistence](http://redis.io/topics/persistence) works and have
-  edited your config file to get your desired persistence. I recommend using both RDB and AOF and setting
+  edited your config file to get your desired persistence. We recommend using both RDB and AOF and setting
   fsync to either "always" or "everysec". 
 
 After that, you can install Jobs like you would any other go package: `go get github.com/albrow/jobs`.
@@ -205,32 +218,7 @@ To run the tests just run `go test .` If anything fails, please report an issue 
 Contributing
 ------------
 
-Feedback, bug reports, and pull requests are greatly appreciated :)
-
-### Issues
-
-The following are all great reasons to submit an issue:
-
-1. You found a bug in the code.
-2. Something is missing from the documentation or the existing documentation is unclear.
-3. You have an idea for a new feature.
-
-If you are thinking about submitting an issue please remember to:
-
-1. Describe the issue in detail.
-2. If applicable, describe the steps to reproduce the error, which probably should include some example code.
-3. Mention details about your platform: OS, version of Go and Redis, etc.
-
-### Pull Requests
-
-Jobs uses semantic versioning and the [git branching model described here](http://nvie.com/posts/a-successful-git-branching-model/).
-If you plan on submitting a pull request, you should:
-
-1. Fork the repository.
-2. Create a new "feature branch" with a descriptive name (e.g. fix-database-error).
-3. Make your changes in the feature branch.
-4. Run the tests to make sure that they still pass. Updated the tests if needed.
-5. Submit a pull request to merge your feature branch into the *develop* branch. Please do not request to merge directly into master.
+See [Contributing.md](https://github.com/albrow/jobs/blob/master/CONTRIBUTING.md)
 
 
 Guarantees

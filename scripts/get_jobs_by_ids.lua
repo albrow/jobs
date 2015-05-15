@@ -36,8 +36,10 @@
 -- 	]
 -- ]
 
+-- IMPORTANT: If you edit this file, you must run go generate . to rewrite ../scripts.go
+
 -- Assign keys to variables for easy access
-local setKey = KEYS[1]
+local setKey = ARGV[1]
 -- Get all the ids from the set name
 local jobIds = redis.call('ZREVRANGE', setKey, 0, -1)
 local allJobs = {}

@@ -67,21 +67,21 @@ func (j *Job) Duration() time.Duration {
 	return j.Finished().Sub(j.Started())
 }
 
-// key returns the key used for the hash in redis which stores all the
+// Key returns the key used for the hash in redis which stores all the
 // fields for this job.
-func (j *Job) key() string {
+func (j *Job) Key() string {
 	return "jobs:" + j.id
 }
 
-// isRecurring returns true iff the job is recurring
-func (j *Job) isRecurring() bool {
+// IsRecurring returns true iff the job is recurring
+func (j *Job) IsRecurring() bool {
 	return j.freq != 0
 }
 
-// nextTime returns the time (unix UTC with nanosecond precision) that the
+// NextTime returns the time (unix UTC with nanosecond precision) that the
 // job should execute next, if it is a recurring job, and 0 if it is not.
-func (j *Job) nextTime() int64 {
-	if !j.isRecurring() {
+func (j *Job) NextTime() int64 {
+	if !j.IsRecurring() {
 		return 0
 	}
 	// NOTE: is this the proper way to handle rescheduling?
@@ -128,7 +128,7 @@ func (t *transaction) saveJob(job *Job) {
 // addJobToTimeIndex adds commands to the transaction which will, when executed,
 // add the job id to the time index with a score equal to the job's time field.
 func (t *transaction) addJobToTimeIndex(job *Job) {
-	t.command("ZADD", redis.Args{keys.jobsTimeIndex, job.time, job.id}, nil)
+	t.command("ZADD", redis.Args{Keys.JobsTimeIndex, job.time, job.id}, nil)
 }
 
 // Refresh mutates the job by setting its fields to the most recent data
@@ -161,7 +161,7 @@ func (j *Job) enqueue() error {
 func (j *Job) Reschedule(time time.Time) error {
 	t := newTransaction()
 	unixNanoTime := time.UTC().UnixNano()
-	t.command("HSET", redis.Args{j.key(), "time", unixNanoTime}, nil)
+	t.command("HSET", redis.Args{j.Key(), "time", unixNanoTime}, nil)
 	t.setStatus(j, StatusQueued)
 	j.time = unixNanoTime
 	t.addJobToTimeIndex(j)
@@ -186,7 +186,7 @@ func (j *Job) Cancel() error {
 func (j *Job) setError(err error) error {
 	j.err = err
 	t := newTransaction()
-	t.command("HSET", redis.Args{j.key(), "error", j.err.Error()}, nil)
+	t.command("HSET", redis.Args{j.Key(), "error", j.err.Error()}, nil)
 	if err := t.exec(); err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func (j *Job) setStatus(status Status) error {
 
 // mainHashArgs returns the args for the hash which will store the job data
 func (j *Job) mainHashArgs() []interface{} {
-	hashArgs := []interface{}{j.key(),
+	hashArgs := []interface{}{j.Key(),
 		"data", string(j.data),
 		"type", j.typ.name,
 		"time", j.time,
@@ -394,7 +394,7 @@ func scanBytes(reply interface{}, v *[]byte) error {
 // the transaction.
 func (t *transaction) scanJobById(id string, job *Job) {
 	job.id = id
-	t.command("HGETALL", redis.Args{job.key()}, newScanJobHandler(job))
+	t.command("HGETALL", redis.Args{job.Key()}, newScanJobHandler(job))
 }
 
 // FindById returns the job with the given id or an error if the job cannot be found

@@ -136,7 +136,7 @@ func createAndSaveTestJobs(n int) ([]*Job, error) {
 func expectJobFieldEquals(t *testing.T, job *Job, fieldName string, expected interface{}, converter replyConverter) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	got, err := conn.Do("HGET", job.key(), fieldName)
+	got, err := conn.Do("HGET", job.Key(), fieldName)
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
@@ -208,7 +208,7 @@ func expectSetDoesNotContain(t *testing.T, setName string, member string) {
 func expectJobInStatusSet(t *testing.T, j *Job, status Status) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", status.key(), j.priority, j.priority))
+	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", status.Key(), j.priority, j.priority))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
@@ -219,7 +219,7 @@ func expectJobInStatusSet(t *testing.T, j *Job, status Status) {
 		}
 	}
 	// If we reached here, we did not find the job we were looking for
-	t.Errorf("job:%s was not found in set %s", j.id, status.key())
+	t.Errorf("job:%s was not found in set %s", j.id, status.Key())
 }
 
 // expectJobInTimeIndex sets an error via t.Errorf if job is not in the time index
@@ -227,7 +227,7 @@ func expectJobInStatusSet(t *testing.T, j *Job, status Status) {
 func expectJobInTimeIndex(t *testing.T, j *Job) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", keys.jobsTimeIndex, j.time, j.time))
+	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", Keys.JobsTimeIndex, j.time, j.time))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
@@ -238,7 +238,7 @@ func expectJobInTimeIndex(t *testing.T, j *Job) {
 		}
 	}
 	// If we reached here, we did not find the job we were looking for
-	t.Errorf("job:%s was not found in set %s", j.id, keys.jobsTimeIndex)
+	t.Errorf("job:%s was not found in set %s", j.id, Keys.JobsTimeIndex)
 }
 
 // expectJobNotInStatusSet sets an error via t.Errorf if job is in the status set
@@ -246,14 +246,14 @@ func expectJobInTimeIndex(t *testing.T, j *Job) {
 func expectJobNotInStatusSet(t *testing.T, j *Job, status Status) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", status.key(), j.priority, j.priority))
+	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", status.Key(), j.priority, j.priority))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
 	for _, id := range gotIds {
 		if id == j.id {
 			// We found the job, but it wasn't supposed to be here!
-			t.Errorf("job:%s was found in set %s but expected it to be removed", j.id, status.key())
+			t.Errorf("job:%s was found in set %s but expected it to be removed", j.id, status.Key())
 		}
 	}
 }
@@ -263,14 +263,14 @@ func expectJobNotInStatusSet(t *testing.T, j *Job, status Status) {
 func expectJobNotInTimeIndex(t *testing.T, j *Job) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", keys.jobsTimeIndex, j.time, j.time))
+	gotIds, err := redis.Strings(conn.Do("ZRANGEBYSCORE", Keys.JobsTimeIndex, j.time, j.time))
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err.Error())
 	}
 	for _, id := range gotIds {
 		if id == j.id {
 			// We found the job, but it wasn't supposed to be here!
-			t.Errorf("job:%s was found in set %s but expected it to be removed", j.id, keys.jobsTimeIndex)
+			t.Errorf("job:%s was found in set %s but expected it to be removed", j.id, Keys.JobsTimeIndex)
 		}
 	}
 }
@@ -306,7 +306,7 @@ func expectStatusEquals(t *testing.T, job *Job, expected Status) {
 // expectJobDestroyed sets an error via t.Errorf if job has not been destroyed.
 func expectJobDestroyed(t *testing.T, job *Job) {
 	// Make sure the main hash is gone
-	expectKeyNotExists(t, job.key())
+	expectKeyNotExists(t, job.Key())
 	expectJobNotInTimeIndex(t, job)
 	for _, status := range possibleStatuses {
 		expectJobNotInStatusSet(t, job, status)

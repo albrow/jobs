@@ -5,7 +5,9 @@
 package jobs
 
 import (
+	"fmt"
 	"github.com/garyburd/redigo/redis"
+	"net"
 	"runtime"
 	"sync"
 	"time"
@@ -84,16 +86,20 @@ var DefaultPoolConfig = &PoolConfig{
 // NewPool creates and returns a new pool with the given configuration. You can
 // pass in nil to use the default values. Otherwise, any zero values in config will
 // be interpreted as the default value.
-func NewPool(config *PoolConfig) *Pool {
+func NewPool(config *PoolConfig) (*Pool, error) {
 	finalConfig := getPoolConfig(config)
+	hardwareId, err := getHardwareId()
+	if err != nil {
+		return nil, err
+	}
 	return &Pool{
 		config:  finalConfig,
-		id:      generateRandomId(),
+		id:      hardwareId,
 		wg:      &sync.WaitGroup{},
 		exit:    make(chan bool),
 		workers: make([]*worker, finalConfig.NumWorkers),
 		jobs:    make(chan *Job, finalConfig.BatchSize),
-	}
+	}, nil
 }
 
 // getPoolConfig replaces any zero values in passedConfig with the default values.
@@ -127,7 +133,7 @@ func (p *Pool) addToPoolSet() error {
 	p.RLock()
 	thisId := p.id
 	p.RUnlock()
-	if _, err := conn.Do("SADD", keys.activePools, thisId); err != nil {
+	if _, err := conn.Do("SADD", Keys.ActivePools, thisId); err != nil {
 		return err
 	}
 	return nil
@@ -141,10 +147,33 @@ func (p *Pool) removeFromPoolSet() error {
 	p.RLock()
 	thisId := p.id
 	p.RUnlock()
-	if _, err := conn.Do("SREM", keys.activePools, thisId); err != nil {
+	if _, err := conn.Do("SREM", Keys.ActivePools, thisId); err != nil {
 		return err
 	}
 	return nil
+}
+
+// getHardwareId returns a unique identifier for the current machine. It does this
+// by iterating through the network interfaces of the machine and picking the first
+// one that has a non-empty hardware (MAC) address. MAC Addresses are guaranteed by
+// IEEE to be unique, however, they are also sometimes spoofable. Spoofed MAC addresses
+// are fine as long as no two machines in the job pool have the same MAC address.
+func getHardwareId() (string, error) {
+	inters, err := net.Interfaces()
+	if err != nil {
+		return "", fmt.Errorf("jobs: Unable to get network interfaces via net.Interfaces(). Does this machine have any network interfaces?\n%s", err.Error())
+	}
+	address := ""
+	for _, inter := range inters {
+		if inter.HardwareAddr.String() != "" {
+			address = inter.HardwareAddr.String()
+			break
+		}
+	}
+	if address == "" {
+		return "", fmt.Errorf("jobs: Unable to find a network interface with a non-empty hardware (MAC) address. Does this machine have any valid network interfaces?\n%s", err.Error())
+	}
+	return address, nil
 }
 
 // pingKey is the key for a pub/sub connection which allows a pool to ping, i.e.
@@ -178,7 +207,7 @@ func (p *Pool) pongKey() string {
 func (p *Pool) purgeStalePools() error {
 	conn := redisPool.Get()
 	defer conn.Close()
-	poolIds, err := redis.Strings(conn.Do("SMEMBERS", keys.activePools))
+	poolIds, err := redis.Strings(conn.Do("SMEMBERS", Keys.ActivePools))
 	if err != nil {
 		return err
 	}
@@ -290,11 +319,32 @@ func (p *Pool) respondToPings() error {
 	}
 }
 
+// removeStaleSelf will check if the current machine recently failed hard
+// (e.g. due to power failuer) by checking if p.id is in the set of active
+// pools. If p.id is still "active" according to the database, it means
+// there was a hard failure, and so removeStaleSelf then re-queues the
+// stale jobs. removeStaleSelf should only be run when the Pool is started.
+func (p *Pool) removeStaleSelf() error {
+	t := newTransaction()
+	t.purgeStalePool(p.id)
+	if err := t.exec(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Start starts the worker pool. This means the pool will initialize workers,
 // continuously query the database for queued jobs, and delegate those jobs
 // to the workers.
 func (p *Pool) Start() error {
-	// Do some bookkeeping related checking status of worker pools
+	// Purge stale jobs belonging to this pool if there was a recent
+	// hard failure
+	if err := p.removeStaleSelf(); err != nil {
+		return err
+	}
+
+	// Check on the status of other worker pools by pinging them and
+	// start the process to repond to pings from other pools
 	if err := p.addToPoolSet(); err != nil {
 		return err
 	}

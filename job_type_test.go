@@ -81,7 +81,7 @@ func TestTypeSchedule(t *testing.T) {
 	if job.id == "" {
 		t.Errorf("After Type.Schedule, job.id was empty.")
 	}
-	expectKeyExists(t, job.key())
+	expectKeyExists(t, job.Key())
 	expectJobFieldEquals(t, job, "priority", testJobPriority, intConverter)
 	expectJobFieldEquals(t, job, "time", encodedTime, int64Converter)
 	expectJobFieldEquals(t, job, "data", encodedData, bytesConverter)

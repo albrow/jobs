@@ -15,6 +15,8 @@
 -- 	3) Removes the job from the executing set
 -- 	2) Returns false
 
+-- IMPORTANT: If you edit this file, you must run go generate . to rewrite ../scripts.go
+
 -- Assign args to variables for easy reference
 local jobId = ARGV[1]
 local jobKey = 'jobs:' .. jobId

@@ -32,7 +32,7 @@ const (
 
 // key returns the key used for the sorted set in redis which will hold
 // all jobs with this status.
-func (status Status) key() string {
+func (status Status) Key() string {
 	return "jobs:" + string(status)
 }
 
@@ -41,7 +41,7 @@ func (status Status) key() string {
 func (status Status) Count() (int, error) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	return redis.Int(conn.Do("ZCARD", status.key()))
+	return redis.Int(conn.Do("ZCARD", status.Key()))
 }
 
 // JobIds returns the ids of all jobs that have the given status, ordered by
@@ -49,7 +49,7 @@ func (status Status) Count() (int, error) {
 func (status Status) JobIds() ([]string, error) {
 	conn := redisPool.Get()
 	defer conn.Close()
-	return redis.Strings(conn.Do("ZREVRANGE", status.key(), 0, -1))
+	return redis.Strings(conn.Do("ZREVRANGE", status.Key(), 0, -1))
 }
 
 // Jobs returns all jobs that have the given status, ordered by priority or
@@ -57,7 +57,7 @@ func (status Status) JobIds() ([]string, error) {
 func (status Status) Jobs() ([]*Job, error) {
 	t := newTransaction()
 	jobs := []*Job{}
-	t.getJobsByIds(status.key(), newScanJobsHandler(&jobs))
+	t.getJobsByIds(status.Key(), newScanJobsHandler(&jobs))
 	if err := t.exec(); err != nil {
 		return nil, err
 	}

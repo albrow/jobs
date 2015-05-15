@@ -290,7 +290,7 @@ func TestScanJob(t *testing.T) {
 	}
 	conn := redisPool.Get()
 	defer conn.Close()
-	replies, err := conn.Do("HGETALL", job.key())
+	replies, err := conn.Do("HGETALL", job.Key())
 	if err != nil {
 		t.Errorf("Unexpected error in HGETALL: %s", err.Error())
 	}

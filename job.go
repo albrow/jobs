@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+var ErrJobNotFound = errors.New("Job not found")
+
 // Job represents a discrete piece of work to be done by a worker.
 type Job struct {
 	id       string
@@ -258,7 +260,7 @@ func scanJob(reply interface{}, job *Job) error {
 	if err != nil {
 		return err
 	} else if len(fields) == 0 {
-		return errors.New("jobs: In scanJob: Job not found")
+		return ErrJobNotFound
 	} else if len(fields)%2 != 0 {
 		return fmt.Errorf("jobs: In scanJob: Expected length of fields to be even but got: %d", len(fields))
 	}

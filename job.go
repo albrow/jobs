@@ -5,6 +5,7 @@
 package jobs
 
 import (
+	"errors"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"time"
@@ -256,8 +257,9 @@ func scanJob(reply interface{}, job *Job) error {
 	fields, err := redis.Values(reply, nil)
 	if err != nil {
 		return err
-	}
-	if len(fields)%2 != 0 {
+	} else if len(fields) == 0 {
+		return errors.New("jobs: In scanJob: Job not found")
+	} else if len(fields)%2 != 0 {
 		return fmt.Errorf("jobs: In scanJob: Expected length of fields to be even but got: %d", len(fields))
 	}
 	for i := 0; i < len(fields)-1; i += 2 {

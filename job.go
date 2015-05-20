@@ -5,13 +5,10 @@
 package jobs
 
 import (
-	"errors"
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"time"
 )
-
-var ErrJobNotFound = errors.New("Job not found")
 
 // Job represents a discrete piece of work to be done by a worker.
 type Job struct {
@@ -27,6 +24,19 @@ type Job struct {
 	started  int64
 	finished int64
 	poolId   string
+}
+
+// ErrorJobNotFound is returned whenever a specific job is not found,
+// e.g. from the FindById function.
+type ErrorJobNotFound struct {
+	id string
+}
+
+func (e ErrorJobNotFound) Error() string {
+	if e.id == "" {
+		return fmt.Sprintf("jobs: Could not find job with the given criteria.")
+	}
+	return fmt.Sprintf("jobs: Could not find job with id: %s", e.id)
 }
 
 // Id returns the unique identifier used for the job. If the job has not yet
@@ -260,7 +270,7 @@ func scanJob(reply interface{}, job *Job) error {
 	if err != nil {
 		return err
 	} else if len(fields) == 0 {
-		return ErrJobNotFound
+		return ErrorJobNotFound{}
 	} else if len(fields)%2 != 0 {
 		return fmt.Errorf("jobs: In scanJob: Expected length of fields to be even but got: %d", len(fields))
 	}
@@ -408,7 +418,15 @@ func FindById(id string) (*Job, error) {
 	t := newTransaction()
 	t.scanJobById(id, job)
 	if err := t.exec(); err != nil {
-		return nil, err
+		switch e := err.(type) {
+		case ErrorJobNotFound:
+			// If the job was not found, add the id to the error
+			// so that the caller can get a more useful error message.
+			e.id = id
+			return nil, e
+		default:
+			return nil, err
+		}
 	}
 	return job, nil
 }

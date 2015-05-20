@@ -5,7 +5,7 @@ A persistent and flexible background jobs library for go.
 
 [![GoDoc](https://godoc.org/github.com/albrow/jobs?status.svg)](https://godoc.org/github.com/albrow/jobs)
 
-Version: X.X.X
+Version: 0.3.1
 
 Jobs is powered by Redis and supports the following features:
 

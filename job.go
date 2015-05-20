@@ -26,6 +26,19 @@ type Job struct {
 	poolId   string
 }
 
+// ErrorJobNotFound is returned whenever a specific job is not found,
+// e.g. from the FindById function.
+type ErrorJobNotFound struct {
+	id string
+}
+
+func (e ErrorJobNotFound) Error() string {
+	if e.id == "" {
+		return fmt.Sprintf("jobs: Could not find job with the given criteria.")
+	}
+	return fmt.Sprintf("jobs: Could not find job with id: %s", e.id)
+}
+
 // Id returns the unique identifier used for the job. If the job has not yet
 // been saved to the database, it may return an empty string.
 func (j *Job) Id() string {
@@ -256,8 +269,9 @@ func scanJob(reply interface{}, job *Job) error {
 	fields, err := redis.Values(reply, nil)
 	if err != nil {
 		return err
-	}
-	if len(fields)%2 != 0 {
+	} else if len(fields) == 0 {
+		return ErrorJobNotFound{}
+	} else if len(fields)%2 != 0 {
 		return fmt.Errorf("jobs: In scanJob: Expected length of fields to be even but got: %d", len(fields))
 	}
 	for i := 0; i < len(fields)-1; i += 2 {
@@ -398,13 +412,22 @@ func (t *transaction) scanJobById(id string, job *Job) {
 }
 
 // FindById returns the job with the given id or an error if the job cannot be found
-// or there was a problem connecting to the database.
+// (in which case the error will have type ErrorJobNotFound) or there was a problem
+// connecting to the database.
 func FindById(id string) (*Job, error) {
 	job := &Job{}
 	t := newTransaction()
 	t.scanJobById(id, job)
 	if err := t.exec(); err != nil {
-		return nil, err
+		switch e := err.(type) {
+		case ErrorJobNotFound:
+			// If the job was not found, add the id to the error
+			// so that the caller can get a more useful error message.
+			e.id = id
+			return nil, e
+		default:
+			return nil, err
+		}
 	}
 	return job, nil
 }

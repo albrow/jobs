@@ -7,6 +7,7 @@ package jobs
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -45,6 +46,44 @@ func TestJobSave(t *testing.T) {
 
 	// Make sure the job was indexed by its time correctly
 	expectJobInTimeIndex(t, job)
+}
+
+func TestJobFindById(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	// Create and save a test job
+	job, err := createTestJob()
+	if err != nil {
+		t.Fatal(err)
+	}
+	job.started = 1
+	job.finished = 5
+	job.freq = 10
+	job.retries = 3
+	job.poolId = "testPool"
+	if err := job.save(); err != nil {
+		t.Errorf("Unexpected error saving job: %s", err.Error())
+	}
+
+	// Find the job in the database
+	jobCopy, err := FindById(job.id)
+	if err != nil {
+		t.Errorf("Unexpected error in FindById: %s", err)
+	}
+	if !reflect.DeepEqual(jobCopy, job) {
+		t.Errorf("Found job was not correct.\n\tExpected: %+v\n\tBut got:  %+v", job, jobCopy)
+	}
+
+	// Attempting to find a job that doesn't exist should return an error
+	fakeId := "foobar"
+	if _, err := FindById(fakeId); err == nil {
+		t.Error("Expected error when FindById was called with a fake id but got none.")
+	} else if _, ok := err.(ErrorJobNotFound); !ok {
+		t.Errorf("Expected error to have type ErrorJobNotFound, but got %T", err)
+	} else if !strings.Contains(err.Error(), fakeId) {
+		t.Error("Expected error message to contain the fake id but it did not.")
+	}
 }
 
 func TestJobRefresh(t *testing.T) {

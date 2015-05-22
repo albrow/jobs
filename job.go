@@ -45,15 +45,42 @@ func (j *Job) Id() string {
 	return j.id
 }
 
+// Data returns the gob-encoded data of the job
+func (j *Job) Data() []byte {
+	return j.data
+}
+
 // Status returns the status of the job.
 func (j *Job) Status() Status {
 	return j.status
+}
+
+// Time returns the time at which the job should be executed in UTC UNIX
+// format with nanosecond precision.
+func (j *Job) Time() int64 {
+	return j.time
+}
+
+// Freq returns the frequency at which the job should be executed. Specifically
+// it returns the number of nanoseconds between each scheduled execution.
+func (j *Job) Freq() int64 {
+	return j.freq
+}
+
+// Priority returns the job's priority.
+func (j *Job) Priority() int {
+	return j.priority
 }
 
 // Error returns the last error that arose during execution of the job. It is
 // only non-nil if the job has failed at some point.
 func (j *Job) Error() error {
 	return j.err
+}
+
+// Retries returns the number of remaining retries for the job.
+func (j *Job) Retries() uint {
+	return j.retries
 }
 
 // Started returns the time that the job started executing (in local time
@@ -68,6 +95,13 @@ func (j *Job) Started() time.Time {
 // finished executing yet.
 func (j *Job) Finished() time.Time {
 	return time.Unix(0, j.finished).Local()
+}
+
+// PoolId returns the pool id of the job if it is currently being executed
+// or has been executed and at some point has been assigned to a specific pool.
+// Otherwise, it returns an empty string.
+func (j *Job) PoolId() string {
+	return j.poolId
 }
 
 // Duration returns how long the job took to execute with nanosecond

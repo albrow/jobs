@@ -20,6 +20,11 @@
 -- Assign args to variables for easy reference
 local jobId = ARGV[1]
 local jobKey = 'jobs:' .. jobId
+-- Make sure the job hasn't already been destroyed
+local exists = redis.call('EXISTS', jobKey)
+if exists ~= 1 then
+	return 0
+end
 -- Check how many retries remain
 local retries = redis.call('HGET', jobKey, 'retries')
 local newStatus = ''

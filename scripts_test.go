@@ -276,3 +276,98 @@ func TestGetJobsByIdsScript(t *testing.T) {
 		t.Errorf("Result of getJobsByIds was incorrect.\n\tExpected: %v\n\tbut got:  %v", jobs, jobsCopy)
 	}
 }
+
+func TestSetJobFieldScript(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	// Create a test job
+	jobs, err := createAndSaveTestJobs(1)
+	if err != nil {
+		t.Fatalf("Unexpected error in createAndSaveTestJobs: %s", err.Error())
+	}
+	job := jobs[0]
+
+	// Set the time to 7 days ago
+	tx := newTransaction()
+	expectedTime := time.Now().Add(-7 * 24 * time.Hour).UTC().UnixNano()
+	tx.setJobField(job, "time", expectedTime)
+	if err := tx.exec(); err != nil {
+		t.Errorf("Unexpected err in tx.exec(): %s", err.Error())
+	}
+
+	// Make sure the time field was set properly
+	if err := job.Refresh(); err != nil {
+		t.Errorf("Unexpected err in job.Refresh: %s", err.Error())
+	}
+	if job.time != expectedTime {
+		t.Errorf("time field was not set. Expected %d but got %d", job.time, expectedTime)
+	}
+
+	// Destroy the job and make sure the script does not set the field
+	if err := job.Destroy(); err != nil {
+		t.Errorf("Unexpected err in job.Destroy: %s", err.Error())
+	}
+	tx = newTransaction()
+	tx.setJobField(job, "foo", "bar")
+	if err := tx.exec(); err != nil {
+		t.Errorf("Unexpected err in tx.exec(): %s", err.Error())
+	}
+	conn := redisPool.Get()
+	defer conn.Close()
+	exists, err := redis.Bool(conn.Do("EXISTS", job.Key()))
+	if err != nil {
+		t.Errorf("Unexpected err in EXISTS: %s", err.Error())
+	}
+	if exists {
+		t.Error("Expected job to not exist after being destroyed but it did.")
+	}
+}
+
+func TestAddJobToSetScript(t *testing.T) {
+	testingSetUp()
+	defer testingTeardown()
+
+	// Create a test job
+	jobs, err := createAndSaveTestJobs(1)
+	if err != nil {
+		t.Fatalf("Unexpected error in createAndSaveTestJobs: %s", err.Error())
+	}
+	job := jobs[0]
+
+	// Add the job to the time index with a score of 7 days ago
+	tx := newTransaction()
+	expectedScore := float64(time.Now().Add(-7 * 24 * time.Hour).UTC().UnixNano())
+	tx.addJobToSet(job, Keys.JobsTimeIndex, expectedScore)
+	if err := tx.exec(); err != nil {
+		t.Errorf("Unexpected err in tx.exec(): %s", err.Error())
+	}
+
+	// Make sure the job was added to the set properly
+	conn := redisPool.Get()
+	defer conn.Close()
+	score, err := redis.Float64(conn.Do("ZSCORE", Keys.JobsTimeIndex, job.id))
+	if err != nil {
+		t.Errorf("Unexpected error in ZSCORE: %s", err.Error())
+	}
+	if score != expectedScore {
+		t.Errorf("Score in time index set was incorrect. Expected %f but got %f", expectedScore, score)
+	}
+
+	// Destroy the job and make sure the script does not add it to a new set
+	if err := job.Destroy(); err != nil {
+		t.Errorf("Unexpected err in job.Destroy: %s", err.Error())
+	}
+	tx = newTransaction()
+	tx.addJobToSet(job, "fooSet", 42.0)
+	if err := tx.exec(); err != nil {
+		t.Errorf("Unexpected err in tx.exec(): %s", err.Error())
+	}
+	exists, err := redis.Bool(conn.Do("EXISTS", "fooSet"))
+	if err != nil {
+		t.Errorf("Unexpected err in EXISTS: %s", err.Error())
+	}
+	if exists {
+		t.Error("Expected fooSet to not exist after the job was destroyed but it did.")
+	}
+}

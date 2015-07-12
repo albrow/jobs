@@ -6,7 +6,6 @@ package jobs
 
 import (
 	"fmt"
-	"github.com/garyburd/redigo/redis"
 	"reflect"
 	"sync"
 	"time"
@@ -52,7 +51,7 @@ func (w *worker) doJob(job *Job) {
 	// Set the started field and save the job
 	job.started = time.Now().UTC().UnixNano()
 	t0 := newTransaction()
-	t0.command("HSET", redis.Args{job.Key(), "started", job.started}, nil)
+	t0.setJobField(job, "started", job.started)
 	if err := t0.exec(); err != nil {
 		if err := setJobError(job, err.Error()); err != nil {
 			// NOTE: panics will be caught by the recover statment above
@@ -89,11 +88,11 @@ func (w *worker) doJob(job *Job) {
 	// Set the finished timestamp
 	job.finished = time.Now().UTC().UnixNano()
 	t1 := newTransaction()
-	t1.command("HSET", redis.Args{job.Key(), "finished", job.finished}, nil)
+	t1.setJobField(job, "finished", job.finished)
 	if job.IsRecurring() {
 		// If the job is recurring, reschedule and set status to queued
 		job.time = job.NextTime()
-		t1.command("HSET", redis.Args{job.Key(), "time", job.time}, nil)
+		t1.setJobField(job, "time", job.time)
 		t1.addJobToTimeIndex(job)
 		t1.setStatus(job, StatusQueued)
 	} else {
@@ -113,7 +112,7 @@ func setJobError(job *Job, msg string) error {
 	// Start a new transaction
 	t := newTransaction()
 	// Set the job error field
-	t.command("HSET", redis.Args{job.Key(), "error", msg}, nil)
+	t.setJobField(job, "error", msg)
 	// Either queue the job for retry or mark it as failed depending
 	// on how many retries the job has left
 	t.retryOrFailJob(job, nil)

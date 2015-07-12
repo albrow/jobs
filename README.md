@@ -5,7 +5,7 @@ A persistent and flexible background jobs library for go.
 
 [![GoDoc](https://godoc.org/github.com/albrow/jobs?status.svg)](https://godoc.org/github.com/albrow/jobs)
 
-Version: X.X.X
+Version: 0.3.2
 
 Jobs is powered by Redis and supports the following features:
 
@@ -55,7 +55,7 @@ of any non-trivial breaking changes beforehand.
 Installation
 ------------
 
-Jobs requires Go version >= 1.2. If you do not already have it, follow these instructions: 
+Jobs requires Go version >= 1.2. If you do not already have it, follow these instructions:
 
 - [Install Go](http://golang.org/doc/install)
 - Follow the instructions for [setting up your go workspace](https://golang.org/doc/code.html)
@@ -70,7 +70,7 @@ machine. In either case, if you need to install Redis, follow these instructions
   [Installing Redis more properly](http://redis.io/topics/quickstart#installing-redis-more-properly).
 - Make sure you understand how [Redis Persistence](http://redis.io/topics/persistence) works and have
   edited your config file to get your desired persistence. We recommend using both RDB and AOF and setting
-  fsync to either "always" or "everysec". 
+  fsync to either "always" or "everysec".
 
 After that, you can install Jobs like you would any other go package: `go get github.com/albrow/jobs`.
 If you want to update the package later, use `go get -u github.com/albrow/jobs`. Then you can import

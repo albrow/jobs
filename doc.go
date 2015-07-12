@@ -2,7 +2,7 @@
 // Use of this source code is governed by the MIT
 // license, which can be found in the LICENSE file.
 
-// package jobs is a persistent and flexible background jobs library.
+// Package jobs is a persistent and flexible background jobs library.
 //
 // Version: X.X.X
 //

@@ -45,15 +45,42 @@ func (j *Job) Id() string {
 	return j.id
 }
 
+// Data returns the gob-encoded data of the job
+func (j *Job) Data() []byte {
+	return j.data
+}
+
 // Status returns the status of the job.
 func (j *Job) Status() Status {
 	return j.status
+}
+
+// Time returns the time at which the job should be executed in UTC UNIX
+// format with nanosecond precision.
+func (j *Job) Time() int64 {
+	return j.time
+}
+
+// Freq returns the frequency at which the job should be executed. Specifically
+// it returns the number of nanoseconds between each scheduled execution.
+func (j *Job) Freq() int64 {
+	return j.freq
+}
+
+// Priority returns the job's priority.
+func (j *Job) Priority() int {
+	return j.priority
 }
 
 // Error returns the last error that arose during execution of the job. It is
 // only non-nil if the job has failed at some point.
 func (j *Job) Error() error {
 	return j.err
+}
+
+// Retries returns the number of remaining retries for the job.
+func (j *Job) Retries() uint {
+	return j.retries
 }
 
 // Started returns the time that the job started executing (in local time
@@ -68,6 +95,13 @@ func (j *Job) Started() time.Time {
 // finished executing yet.
 func (j *Job) Finished() time.Time {
 	return time.Unix(0, j.finished).Local()
+}
+
+// PoolId returns the pool id of the job if it is currently being executed
+// or has been executed and at some point has been assigned to a specific pool.
+// Otherwise, it returns an empty string.
+func (j *Job) PoolId() string {
+	return j.poolId
 }
 
 // Duration returns how long the job took to execute with nanosecond
@@ -140,8 +174,9 @@ func (t *transaction) saveJob(job *Job) {
 
 // addJobToTimeIndex adds commands to the transaction which will, when executed,
 // add the job id to the time index with a score equal to the job's time field.
+// If the job has been destroyed, addJobToTimeIndex will have no effect.
 func (t *transaction) addJobToTimeIndex(job *Job) {
-	t.command("ZADD", redis.Args{Keys.JobsTimeIndex, job.time, job.id}, nil)
+	t.addJobToSet(job, Keys.JobsTimeIndex, float64(job.time))
 }
 
 // Refresh mutates the job by setting its fields to the most recent data
@@ -157,7 +192,8 @@ func (j *Job) Refresh() error {
 }
 
 // enqueue adds the job to the queue and sets its status to StatusQueued. Queued jobs will
-// be completed by workers in order of priority.
+// be completed by workers in order of priority. Attempting to enqueue a destroyed job
+// will have no effect.
 func (j *Job) enqueue() error {
 	if err := j.setStatus(StatusQueued); err != nil {
 		return err
@@ -169,12 +205,12 @@ func (j *Job) enqueue() error {
 // cancelled jobs. It may also be used to reschedule finished or failed jobs, however,
 // in most cases if you want to reschedule finished jobs you should use the ScheduleRecurring
 // method and if you want to reschedule failed jobs, you should set the number of retries > 0
-// when registering the job type. Reschedule returns an error if there was a problem connecting
-// to the database.
+// when registering the job type. Attempting to reschedule a destroyed job will have no effect.
+// Reschedule returns an error if there was a problem connecting to the database.
 func (j *Job) Reschedule(time time.Time) error {
 	t := newTransaction()
 	unixNanoTime := time.UTC().UnixNano()
-	t.command("HSET", redis.Args{j.Key(), "time", unixNanoTime}, nil)
+	t.setJobField(j, "time", unixNanoTime)
 	t.setStatus(j, StatusQueued)
 	j.time = unixNanoTime
 	t.addJobToTimeIndex(j)
@@ -187,7 +223,7 @@ func (j *Job) Reschedule(time time.Time) error {
 
 // Cancel cancels the job, but does not remove it from the database. It will be
 // added to a list of cancelled jobs. If you wish to remove it from the database,
-// use the Destroy method.
+// use the Destroy method. Attempting to cancel a destroyed job will have no effect.
 func (j *Job) Cancel() error {
 	if err := j.setStatus(StatusCancelled); err != nil {
 		return err
@@ -195,11 +231,12 @@ func (j *Job) Cancel() error {
 	return nil
 }
 
-// setError sets the err property of j and adds it to the set of jobs which had errors
+// setError sets the err property of j and adds it to the set of jobs which had errors.
+// If the job has been destroyed, setError will have no effect.
 func (j *Job) setError(err error) error {
 	j.err = err
 	t := newTransaction()
-	t.command("HSET", redis.Args{j.Key(), "error", j.err.Error()}, nil)
+	t.setJobField(j, "error", j.err.Error())
 	if err := t.exec(); err != nil {
 		return err
 	}
@@ -207,7 +244,9 @@ func (j *Job) setError(err error) error {
 }
 
 // Destroy removes all traces of the job from the database. If the job is currently
-// being executed by a worker, the worker may still finish the job.
+// being executed by a worker, the worker may still finish the job. Attempting to
+// destroy a job that has already been destroyed will have no effect, so it is safe
+// to call Destroy multiple times.
 func (j *Job) Destroy() error {
 	if j.id == "" {
 		return fmt.Errorf("jobs: Cannot destroy job that doesn't have an id.")
@@ -225,7 +264,8 @@ func (j *Job) Destroy() error {
 }
 
 // setStatus updates the job's status in the database and moves it to the appropriate
-// status set.
+// status set. Attempting to set the status of a job which has been destroyed will have
+// no effect.
 func (j *Job) setStatus(status Status) error {
 	if j.id == "" {
 		return fmt.Errorf("jobs: Cannot set status to %s because job doesn't have an id.", status)

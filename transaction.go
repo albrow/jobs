@@ -292,3 +292,19 @@ func (t *transaction) purgeStalePool(poolId string) {
 func (t *transaction) getJobsByIds(setKey string, handler replyHandler) {
 	t.script(getJobsByIdsScript, redis.Args{setKey}, handler)
 }
+
+// setJobField is a small function wrapper around setJobFieldScript.
+// It offers some type safety and helps make sure the arguments you pass through are correct.
+// The script will set the given field to the given value iff the job exists and has not been
+// destroyed.
+func (t *transaction) setJobField(job *Job, fieldName string, fieldValue interface{}) {
+	t.script(setJobFieldScript, redis.Args{job.id, fieldName, fieldValue}, nil)
+}
+
+// addJobToSet is a small function wrapper around addJobToSetScript.
+// It offers some type safety and helps make sure the arguments you pass through are correct.
+// The script will add the job to the given set with the given score iff the job exists
+// and has not been destroyed.
+func (t *transaction) addJobToSet(job *Job, setName string, score float64) {
+	t.script(addJobToSetScript, redis.Args{job.id, setName, score}, nil)
+}

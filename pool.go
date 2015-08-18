@@ -6,11 +6,12 @@ package jobs
 
 import (
 	"fmt"
-	"github.com/garyburd/redigo/redis"
 	"net"
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/garyburd/redigo/redis"
 )
 
 // Pool is a pool of workers. Pool will query the database for queued jobs
@@ -32,6 +33,8 @@ type Pool struct {
 	// exit is used to signal the pool to stop running the query loop
 	// and close the jobs channel
 	exit chan bool
+	// afterFunc is a function that gets called after each job.
+	afterFunc *func(*Job)
 	// RWMutex is only used during testing when we need to
 	// change some of the fields for the pool after it was started.
 	// NOTE: currently only used in one test (TestStalePoolsArePurged)
@@ -333,6 +336,12 @@ func (p *Pool) removeStaleSelf() error {
 	return nil
 }
 
+// SetAfterFunc will assign a function that will be executed each time
+// a job is finished.
+func (p *Pool) SetAfterFunc(f func(*Job)) {
+	*p.afterFunc = f
+}
+
 // Start starts the worker pool. This means the pool will initialize workers,
 // continuously query the database for queued jobs, and delegate those jobs
 // to the workers.
@@ -367,8 +376,9 @@ func (p *Pool) Start() error {
 	for i := range p.workers {
 		p.wg.Add(1)
 		worker := &worker{
-			wg:   p.wg,
-			jobs: p.jobs,
+			wg:        p.wg,
+			jobs:      p.jobs,
+			afterFunc: p.afterFunc,
 		}
 		p.workers[i] = worker
 		worker.start()

@@ -34,7 +34,7 @@ type Pool struct {
 	// and close the jobs channel
 	exit chan bool
 	// afterFunc is a function that gets called after each job.
-	afterFunc *func(*Job)
+	afterFunc func(*Job)
 	// RWMutex is only used during testing when we need to
 	// change some of the fields for the pool after it was started.
 	// NOTE: currently only used in one test (TestStalePoolsArePurged)
@@ -339,7 +339,7 @@ func (p *Pool) removeStaleSelf() error {
 // SetAfterFunc will assign a function that will be executed each time
 // a job is finished.
 func (p *Pool) SetAfterFunc(f func(*Job)) {
-	*p.afterFunc = f
+	p.afterFunc = f
 }
 
 // Start starts the worker pool. This means the pool will initialize workers,

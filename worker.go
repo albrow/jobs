@@ -17,7 +17,7 @@ import (
 type worker struct {
 	jobs      chan *Job
 	wg        *sync.WaitGroup
-	afterFunc *func(*Job)
+	afterFunc func(*Job)
 }
 
 // start starts a goroutine in which the worker will continuously
@@ -35,7 +35,7 @@ func (w *worker) start() {
 // the job appropriately depending on the outcome of the execution.
 func (w *worker) doJob(job *Job) {
 	if w.afterFunc != nil {
-		defer (*w.afterFunc)(job)
+		defer w.afterFunc(job)
 	}
 
 	defer func() {

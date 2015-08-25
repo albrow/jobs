@@ -15,8 +15,9 @@ import (
 // The jobs chan is shared between all jobs. To stop the worker,
 // simply close the jobs channel.
 type worker struct {
-	jobs chan *Job
-	wg   *sync.WaitGroup
+	jobs      chan *Job
+	wg        *sync.WaitGroup
+	afterFunc func(*Job)
 }
 
 // start starts a goroutine in which the worker will continuously
@@ -33,6 +34,10 @@ func (w *worker) start() {
 // doJob executes the given job. It also sets the status and timestamps for
 // the job appropriately depending on the outcome of the execution.
 func (w *worker) doJob(job *Job) {
+	if w.afterFunc != nil {
+		defer w.afterFunc(job)
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			// Get a reasonable error message from the panic
@@ -76,6 +81,9 @@ func (w *worker) doJob(job *Job) {
 	// Call the handler using the arguments we just instantiated
 	handlerVal := reflect.ValueOf(job.typ.handler)
 	returnVals := handlerVal.Call(handlerArgs)
+	// Set the finished timestamp
+	job.finished = time.Now().UTC().UnixNano()
+
 	// Check if the error return value was nil
 	if !returnVals[0].IsNil() {
 		err := returnVals[0].Interface().(error)
@@ -85,8 +93,6 @@ func (w *worker) doJob(job *Job) {
 		}
 		return
 	}
-	// Set the finished timestamp
-	job.finished = time.Now().UTC().UnixNano()
 	t1 := newTransaction()
 	t1.setJobField(job, "finished", job.finished)
 	if job.IsRecurring() {

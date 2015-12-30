@@ -194,7 +194,7 @@ func main() {
 		if err := pool.Wait(); err != nil {
 			// Handle err
 		}
-	}
+	}()
 	if err := pool.Start(); err != nil {
 		// Handle err
 	}

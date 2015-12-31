@@ -3,9 +3,9 @@ Jobs
 
 A persistent and flexible background jobs library for go.
 
+[![Version](https://img.shields.io/badge/version-X.X.X-5272B4.svg)](https://github.com/albrow/jobs/releases)
+[![Circle CI](https://img.shields.io/circleci/project/albrow/jobs.svg)](https://circleci.com/gh/albrow/jobs)
 [![GoDoc](https://godoc.org/github.com/albrow/jobs?status.svg)](https://godoc.org/github.com/albrow/jobs)
-
-Version: X.X.X
 
 Jobs is powered by Redis and supports the following features:
 

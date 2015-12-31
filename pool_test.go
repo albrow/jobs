@@ -7,13 +7,14 @@ package jobs
 import (
 	"errors"
 	"fmt"
-	"github.com/dustin/go-humanize"
-	"github.com/garyburd/redigo/redis"
 	"reflect"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/dustin/go-humanize"
+	"github.com/garyburd/redigo/redis"
 )
 
 // TestPoolIdSet tests that the pool id is set properly when a pool is started
@@ -608,11 +609,8 @@ func TestRecurringJob(t *testing.T) {
 	}
 
 	// Schedule a recurring signalJob
-	freq := 20 * time.Millisecond
-	currentTime := time.Now()
-	currentTimeUnix := currentTime.UTC().UnixNano()
-
-	job, err := signalJob.ScheduleRecurring(100, currentTime, freq, nil)
+	const freq = 20 * time.Millisecond
+	job, err := signalJob.ScheduleRecurring(100, time.Now(), freq, nil)
 	if err != nil {
 		t.Errorf("Unexpected error in ScheduleRecurring: %s", err.Error())
 	}
@@ -625,12 +623,8 @@ func TestRecurringJob(t *testing.T) {
 	// Wait for three successful scheduled executions at the specified
 	// frequency, with some tolerance for variation due to execution overhead.
 	expectedSuccesses := 5
-	expectedTimes := []int64{}
-	for i := 0; i <= expectedSuccesses; i++ {
-		expectedTimes = append(expectedTimes, currentTimeUnix+freq.Nanoseconds()*int64(i))
-	}
 	successCount := 0
-	tolerance := 0.1
+	const tolerance = 0.1
 	timeoutDur := time.Duration(int64(float64(freq.Nanoseconds()) * (1 + tolerance)))
 OuterLoop:
 	for {
@@ -639,16 +633,16 @@ OuterLoop:
 		case <-jobFinished:
 			// This means one more job was successfully executed
 			successCount += 1
+			lastTime := job.time
+			nextTime := job.NextTime()
+			if !(nextTime > lastTime) {
+				t.Errorf("job.NextTime was calculated incorrectly. %d is not greater than %d", nextTime, lastTime)
+			} else if nextTime-lastTime != freq.Nanoseconds() {
+				t.Errorf("job.NextTime was calculated incorrectly. %d - %d is not the frequency (%d)", nextTime, lastTime, freq)
+			}
 			if err := job.Refresh(); err != nil {
 				t.Errorf("Unexpected error in job.Refresh(): %s", err.Error())
 			}
-			// Make sure the next scheduled job time parameter is correct
-			if job.time != expectedTimes[successCount] {
-				t.Errorf("job.time was wrong.\n\tExpected: %v\n\tBut got:  %v", expectedTimes[successCount], job.time)
-			}
-			// Make sure the job was started after the previous expected time
-			expectedStartAfter := time.Unix(0, expectedTimes[successCount-1])
-			expectTimeAfter(t, job.Started(), expectedStartAfter)
 			// If we reached expectedSuccesses, we're done and the test passes!
 			if successCount == expectedSuccesses {
 				break OuterLoop

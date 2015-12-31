@@ -6,11 +6,12 @@ package jobs
 
 import (
 	"fmt"
-	"github.com/garyburd/redigo/redis"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/garyburd/redigo/redis"
 )
 
 // setUpOnce enforces that certain pieces of the set up process only occur once,
@@ -24,8 +25,6 @@ func testingSetUp() {
 		// Use database 14 and a unix socket connection for testing
 		// TODO: allow this to be configured via command-line flags
 		Config.Db.Database = 14
-		Config.Db.Address = "/tmp/redis.sock"
-		Config.Db.Network = "unix"
 	})
 	// Clear out any old job types
 	Types = map[string]*Type{}

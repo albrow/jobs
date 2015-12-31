@@ -4,7 +4,7 @@
 
 // Package jobs is a persistent and flexible background jobs library.
 //
-// Version: 0.4.1
+// Version: 0.4.2
 //
 // Jobs is powered by redis and supports the following features:
 //

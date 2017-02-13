@@ -32,7 +32,8 @@ var (
 local jobId = ARGV[1]
 local setName = ARGV[2]
 local score = ARGV[3]
-local jobKey = 'jobs:' .. jobId
+local prefix = ARGV[4]
+local jobKey = prefix .. jobId
 -- Make sure the job hasn't already been destroyed
 local exists = redis.call('EXISTS', jobKey)
 if exists ~= 1 then
@@ -54,15 +55,16 @@ redis.call('ZADD', setName, score, jobId)`)
 
 -- Assign args to variables for easy reference
 local jobId = ARGV[1]
-local jobKey = 'jobs:' .. jobId
+local prefix = ARGV[2]
+local jobKey = prefix .. jobId
 -- Remove the job from the status set
 local status = redis.call('HGET', jobKey, 'status')
 if status ~= '' then
-	local statusSet = 'jobs:' .. status
+	local statusSet = prefix .. status
 	redis.call('ZREM', statusSet, jobId)
 end
 -- Remove the job from the time index
-redis.call('ZREM', 'jobs:time', jobId)
+redis.call('ZREM', prefix .. 'time', jobId)
 -- Remove the main hash for the job
 redis.call('DEL', jobKey)`)
 	getJobsByIdsScript = redis.NewScript(0, `-- Copyright 2015 Alex Browne.  All rights reserved.
@@ -107,13 +109,14 @@ redis.call('DEL', jobKey)`)
 
 -- Assign keys to variables for easy access
 local setKey = ARGV[1]
+local prefix = ARGV[2]
 -- Get all the ids from the set name
 local jobIds = redis.call('ZREVRANGE', setKey, 0, -1)
 local allJobs = {}
 if #jobIds > 0 then
 	-- Iterate over the ids and find each job
 	for i, jobId in ipairs(jobIds) do
-		local jobKey = 'jobs:' .. jobId
+		local jobKey = prefix .. jobId
 		local jobFields = redis.call('HGETALL', jobKey)
 		-- Add the id itself to the fields
 		jobFields[#jobFields+1] = 'id'
@@ -169,30 +172,31 @@ return allJobs`)
 local n = ARGV[1]
 local currentTime = ARGV[2]
 local poolId = ARGV[3]
+local prefix = ARGV[4]
 -- Copy the time index set to a new temporary set
-redis.call('ZUNIONSTORE', 'jobs:temp', 1, 'jobs:time')
+redis.call('ZUNIONSTORE', prefix .. 'temp', 1, prefix .. 'time')
 -- Trim the new temporary set we just created to leave only the jobs which have a time
 -- parameter in the past
-redis.call('ZREMRANGEBYSCORE', 'jobs:temp', currentTime, '+inf')
+redis.call('ZREMRANGEBYSCORE', prefix .. 'temp', currentTime, '+inf')
 -- Intersect the jobs which are ready based on their time with those in the
 -- queued set. Use the weights parameter to set the scores entirely based on the
 -- queued set, effectively sorting the jobs by priority. Store the results in the
 -- temporary set.
-redis.call('ZINTERSTORE', 'jobs:temp', 2, 'jobs:queued', 'jobs:temp', 'WEIGHTS', 1, 0)
+redis.call('ZINTERSTORE', prefix .. 'temp', 2, prefix .. 'queued', prefix .. 'temp', 'WEIGHTS', 1, 0)
 -- Trim the temp set, so it contains only the first n jobs ordered by
 -- priority
-redis.call('ZREMRANGEBYRANK', 'jobs:temp', 0, -n - 1)
+redis.call('ZREMRANGEBYRANK', prefix .. 'temp', 0, -n - 1)
 -- Get all job ids from the temp set
-local jobIds = redis.call('ZREVRANGE', 'jobs:temp', 0, -1)
+local jobIds = redis.call('ZREVRANGE', prefix .. 'temp', 0, -1)
 local allJobs = {}
 if #jobIds > 0 then
 	-- Add job ids to the executing set
-	redis.call('ZUNIONSTORE', 'jobs:executing', 2, 'jobs:executing', 'jobs:temp')
+	redis.call('ZUNIONSTORE', prefix .. 'executing', 2, prefix .. 'executing', prefix .. 'temp')
 	-- Now we are ready to construct our response.
 	for i, jobId in ipairs(jobIds) do
-		local jobKey = 'jobs:' .. jobId
+		local jobKey = prefix .. jobId
 		-- Remove the job from the queued set
-		redis.call('ZREM', 'jobs:queued', jobId)
+		redis.call('ZREM', prefix .. 'queued', jobId)
 		-- Set the poolId field for the job
 		redis.call('HSET', jobKey, 'poolId', poolId)
 		-- Set the job status to executing
@@ -207,7 +211,7 @@ if #jobIds > 0 then
 	end
 end
 -- Delete the temporary set
-redis.call('DEL', 'jobs:temp')
+redis.call('DEL', prefix .. 'temp')
 -- Return all the fields for all the jobs
 return allJobs`)
 	purgeStalePoolScript = redis.NewScript(0, `-- Copyright 2015 Alex Browne.  All rights reserved.
@@ -227,15 +231,16 @@ return allJobs`)
 
 -- Assign args to variables for easy reference
 local stalePoolId = ARGV[1]
+local prefix = ARGV[2]
 -- Check if the stale pool is in the set of active pools first
-local isActive = redis.call('SISMEMBER', 'pools:active', stalePoolId)
+local isActive = redis.call('SISMEMBER', prefix .. 'pools:active', stalePoolId)
 if isActive then
 	-- Remove the stale pool from the set of active pools
-	redis.call('SREM', 'pools:active', stalePoolId)
+	redis.call('SREM', prefix .. 'pools:active', stalePoolId)
 	-- Get all the jobs in the executing set
-	local jobIds = redis.call('ZRANGE', 'jobs:executing', 0, -1)
+	local jobIds = redis.call('ZRANGE', prefix .. 'executing', 0, -1)
 	for i, jobId in ipairs(jobIds) do
-		local jobKey = 'jobs:' .. jobId
+		local jobKey = prefix .. jobId
 		-- Check the poolId field
 		-- If the poolId is equal to the stale id, then this job is stuck
 		-- in the executing set even though no worker is actually executing it
@@ -243,9 +248,9 @@ if isActive then
 		if poolId == stalePoolId then
 			local jobPriority = redis.call('HGET', jobKey, 'priority')
 			-- Move the job into the queued set
-			redis.call('ZADD', 'jobs:queued', jobPriority, jobId)
+			redis.call('ZADD', prefix .. 'queued', jobPriority, jobId)
 			-- Remove the job from the executing set
-			redis.call('ZREM', 'jobs:executing', jobId)
+			redis.call('ZREM', prefix .. 'executing', jobId)
 			-- Set the job status to queued and the pool id to blank
 			redis.call('HMSET', jobKey, 'status', 'queued', 'poolId', '')
 		end
@@ -273,7 +278,8 @@ end
 
 -- Assign args to variables for easy reference
 local jobId = ARGV[1]
-local jobKey = 'jobs:' .. jobId
+local prefix = ARGV[2]
+local jobKey = prefix .. jobId
 -- Make sure the job hasn't already been destroyed
 local exists = redis.call('EXISTS', jobKey)
 if exists ~= 1 then
@@ -294,12 +300,12 @@ end
 -- Get the job priority (used as score)
 local jobPriority = redis.call('HGET', jobKey, 'priority')
 -- Add the job to the appropriate new set
-local newStatusSet = 'jobs:' .. newStatus
+local newStatusSet = prefix .. newStatus
 redis.call('ZADD', newStatusSet, jobPriority, jobId)	
 -- Remove the job from the old status set
 local oldStatus = redis.call('HGET', jobKey, 'status')
 if ((oldStatus ~= '') and (oldStatus ~= newStatus)) then
-	local oldStatusSet = 'jobs:' .. oldStatus
+	local oldStatusSet = prefix .. oldStatus
 	redis.call('ZREM', oldStatusSet, jobId)
 end
 -- Set the job status in the hash
@@ -330,7 +336,8 @@ end`)
 local jobId = ARGV[1]
 local fieldName = ARGV[2]
 local fieldVal = ARGV[3]
-local jobKey = 'jobs:' .. jobId
+local prefix = ARGV[4]
+local jobKey = prefix .. jobId
 -- Make sure the job hasn't already been destroyed
 local exists = redis.call('EXISTS', jobKey)
 if exists ~= 1 then
@@ -354,20 +361,21 @@ redis.call('HSET', jobKey, fieldName, fieldVal)`)
 -- Assign args to variables for easy reference
 local jobId = ARGV[1]
 local newStatus = ARGV[2]
-local jobKey = 'jobs:' .. jobId
+local prefix = ARGV[3]
+local jobKey = prefix .. jobId
 -- Make sure the job hasn't already been destroyed
 local exists = redis.call('EXISTS', jobKey)
 if exists ~= 1 then
 	return
 end
-local newStatusSet = 'jobs:' .. newStatus
+local newStatusSet = prefix .. newStatus
 -- Add the job to the new status set
 local jobPriority = redis.call('HGET', jobKey, 'priority')
 redis.call('ZADD', newStatusSet, jobPriority, jobId)
 -- Remove the job from the old status set
 local oldStatus = redis.call('HGET', jobKey, 'status')
 if ((oldStatus ~= '') and (oldStatus ~= newStatus)) then
-	local oldStatusSet = 'jobs:' .. oldStatus
+	local oldStatusSet = prefix .. oldStatus
 	redis.call('ZREM', oldStatusSet, jobId)
 end
 -- Set the status field

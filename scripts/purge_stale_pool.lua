@@ -15,15 +15,16 @@
 
 -- Assign args to variables for easy reference
 local stalePoolId = ARGV[1]
+local prefix = ARGV[2]
 -- Check if the stale pool is in the set of active pools first
-local isActive = redis.call('SISMEMBER', '{{.activePoolsSet}}', stalePoolId)
+local isActive = redis.call('SISMEMBER', prefix .. '{{.activePoolsSet}}', stalePoolId)
 if isActive then
 	-- Remove the stale pool from the set of active pools
-	redis.call('SREM', '{{.activePoolsSet}}', stalePoolId)
+	redis.call('SREM', prefix .. '{{.activePoolsSet}}', stalePoolId)
 	-- Get all the jobs in the executing set
-	local jobIds = redis.call('ZRANGE', '{{.executingSet}}', 0, -1)
+	local jobIds = redis.call('ZRANGE', prefix .. '{{.executingSet}}', 0, -1)
 	for i, jobId in ipairs(jobIds) do
-		local jobKey = 'jobs:' .. jobId
+		local jobKey = prefix .. jobId
 		-- Check the poolId field
 		-- If the poolId is equal to the stale id, then this job is stuck
 		-- in the executing set even though no worker is actually executing it
@@ -31,9 +32,9 @@ if isActive then
 		if poolId == stalePoolId then
 			local jobPriority = redis.call('HGET', jobKey, 'priority')
 			-- Move the job into the queued set
-			redis.call('ZADD', '{{.queuedSet}}', jobPriority, jobId)
+			redis.call('ZADD', prefix .. '{{.queuedSet}}', jobPriority, jobId)
 			-- Remove the job from the executing set
-			redis.call('ZREM', '{{.executingSet}}', jobId)
+			redis.call('ZREM', prefix .. '{{.executingSet}}', jobId)
 			-- Set the job status to queued and the pool id to blank
 			redis.call('HMSET', jobKey, 'status', '{{.statusQueued}}', 'poolId', '')
 		end

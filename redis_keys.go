@@ -17,7 +17,7 @@ var Keys = struct {
 	// pools.
 	ActivePools string
 }{
-	JobsTimeIndex: "jobs:time",
-	JobsTemp:      "jobs:temp",
+	JobsTimeIndex: "time",
+	JobsTemp:      "temp",
 	ActivePools:   "pools:active",
 }

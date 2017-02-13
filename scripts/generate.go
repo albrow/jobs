@@ -12,13 +12,14 @@ package main
 
 import (
 	"bytes"
-	"github.com/albrow/jobs"
 	"go/build"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	"github.com/yadvendar/jobs"
 )
 
 var (
@@ -42,13 +43,13 @@ var (
 		"statusFailed":    string(jobs.StatusFailed),
 		"statusCancelled": string(jobs.StatusCancelled),
 		"statusDestroyed": string(jobs.StatusDestroyed),
-		"savedSet":        jobs.StatusSaved.Key(),
-		"queuedSet":       jobs.StatusQueued.Key(),
-		"executingSet":    jobs.StatusExecuting.Key(),
-		"finishedSet":     jobs.StatusFinished.Key(),
-		"failedSet":       jobs.StatusFailed.Key(),
-		"cancelledSet":    jobs.StatusCancelled.Key(),
-		"destroyedSet":    jobs.StatusDestroyed.Key(),
+		"savedSet":        string(jobs.StatusSaved),
+		"queuedSet":       string(jobs.StatusQueued),
+		"executingSet":    string(jobs.StatusExecuting),
+		"finishedSet":     string(jobs.StatusFinished),
+		"failedSet":       string(jobs.StatusFailed),
+		"cancelledSet":    string(jobs.StatusCancelled),
+		"destroyedSet":    string(jobs.StatusDestroyed),
 		"timeIndexSet":    jobs.Keys.JobsTimeIndex,
 		"jobsTempSet":     jobs.Keys.JobsTemp,
 		"activePoolsSet":  jobs.Keys.ActivePools,
@@ -69,7 +70,7 @@ func init() {
 	// Use build to find the directory where this file lives. This always works as
 	// long as you have go installed, even if you have multiple GOPATHs or are using
 	// dependency management tools.
-	pkg, err := build.Import("github.com/albrow/jobs", "", build.FindOnly)
+	pkg, err := build.Import("github.com/yadvendar/jobs", "", build.FindOnly)
 	if err != nil {
 		panic(err)
 	}

@@ -33,7 +33,7 @@ const (
 // key returns the key used for the sorted set in redis which will hold
 // all jobs with this status.
 func (status Status) Key() string {
-	return "jobs:" + string(status)
+	return Config.GetKeyPrefix() + string(status)
 }
 
 // Count returns the number of jobs that currently have the given status

@@ -40,13 +40,14 @@
 
 -- Assign keys to variables for easy access
 local setKey = ARGV[1]
+local prefix = ARGV[2]
 -- Get all the ids from the set name
 local jobIds = redis.call('ZREVRANGE', setKey, 0, -1)
 local allJobs = {}
 if #jobIds > 0 then
 	-- Iterate over the ids and find each job
 	for i, jobId in ipairs(jobIds) do
-		local jobKey = 'jobs:' .. jobId
+		local jobKey = prefix .. jobId
 		local jobFields = redis.call('HGETALL', jobKey)
 		-- Add the id itself to the fields
 		jobFields[#jobFields+1] = 'id'

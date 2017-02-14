@@ -177,7 +177,7 @@ func (t *transaction) saveJob(job *Job) {
 // add the job id to the time index with a score equal to the job's time field.
 // If the job has been destroyed, addJobToTimeIndex will have no effect.
 func (t *transaction) addJobToTimeIndex(job *Job) {
-	t.addJobToSet(job, Keys.JobsTimeIndex, float64(job.time))
+	t.addJobToSet(job, Keys.JobsTimeIndex.Key(), float64(job.time))
 }
 
 // Refresh mutates the job by setting its fields to the most recent data

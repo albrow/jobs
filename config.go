@@ -45,9 +45,6 @@ func (c *configType) SetEnvPrefix(p string) {
 		return
 	}
 	c.envPrefix = p
-	Keys.JobsTimeIndex = c.GetKeyPrefix() + Keys.JobsTimeIndex
-	Keys.JobsTemp = c.GetKeyPrefix() + Keys.JobsTemp
-	Keys.ActivePools = c.GetKeyPrefix() + Keys.ActivePools
 }
 func (c *configType) GetKeyPrefix() string {
 	var hardCodedPrefix = "jobs:"

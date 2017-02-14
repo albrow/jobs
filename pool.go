@@ -136,7 +136,7 @@ func (p *Pool) addToPoolSet() error {
 	p.RLock()
 	thisId := p.id
 	p.RUnlock()
-	if _, err := conn.Do("SADD", Keys.ActivePools, thisId); err != nil {
+	if _, err := conn.Do("SADD", Keys.ActivePools.Key(), thisId); err != nil {
 		return err
 	}
 	return nil
@@ -150,7 +150,7 @@ func (p *Pool) removeFromPoolSet() error {
 	p.RLock()
 	thisId := p.id
 	p.RUnlock()
-	if _, err := conn.Do("SREM", Keys.ActivePools, thisId); err != nil {
+	if _, err := conn.Do("SREM", Keys.ActivePools.Key(), thisId); err != nil {
 		return err
 	}
 	return nil
@@ -210,7 +210,7 @@ func (p *Pool) pongKey() string {
 func (p *Pool) purgeStalePools() error {
 	conn := redisPool.Get()
 	defer conn.Close()
-	poolIds, err := redis.Strings(conn.Do("SMEMBERS", Keys.ActivePools))
+	poolIds, err := redis.Strings(conn.Do("SMEMBERS", Keys.ActivePools.Key()))
 	if err != nil {
 		return err
 	}

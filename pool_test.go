@@ -30,12 +30,12 @@ func TestPoolIdSet(t *testing.T) {
 	if err := pool.Start(); err != nil {
 		t.Errorf("Unexpected error in pool.Start(): %s", err.Error())
 	}
-	expectSetContains(t, Keys.ActivePools, pool.id)
+	expectSetContains(t, Keys.ActivePools.Key(), pool.id)
 	pool.Close()
 	if err := pool.Wait(); err != nil {
 		t.Errorf("Unexpected error in pool.Wait(): %s", err.Error())
 	}
-	expectSetDoesNotContain(t, Keys.ActivePools, pool.id)
+	expectSetDoesNotContain(t, Keys.ActivePools.Key(), pool.id)
 }
 
 // TestGetNextJobs tests the getNextJobs function, which queries the database to find
@@ -940,7 +940,7 @@ func TestStalePoolsArePurged(t *testing.T) {
 	}
 
 	// At this point, the stale pool should have been fully purged.
-	expectSetDoesNotContain(t, Keys.ActivePools, oldId)
+	expectSetDoesNotContain(t, Keys.ActivePools.Key(), oldId)
 	expectJobFieldEquals(t, job, "poolId", newPool.id, stringConverter)
 }
 

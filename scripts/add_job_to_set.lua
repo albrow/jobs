@@ -14,7 +14,8 @@
 local jobId = ARGV[1]
 local setName = ARGV[2]
 local score = ARGV[3]
-local jobKey = 'jobs:' .. jobId
+local prefix = ARGV[4]
+local jobKey = prefix .. jobId
 -- Make sure the job hasn't already been destroyed
 local exists = redis.call('EXISTS', jobKey)
 if exists ~= 1 then

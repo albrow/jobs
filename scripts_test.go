@@ -5,10 +5,11 @@
 package jobs
 
 import (
-	"github.com/garyburd/redigo/redis"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/garyburd/redigo/redis"
 )
 
 func TestPopNextJobsScript(t *testing.T) {
@@ -21,7 +22,7 @@ func TestPopNextJobsScript(t *testing.T) {
 	// Set up the database
 	tx0 := newTransaction()
 	// One set will mimic the ready and sorted jobs
-	tx0.command("ZADD", redis.Args{Keys.JobsTimeIndex, pastTime, "two", pastTime, "four"}, nil)
+	tx0.command("ZADD", redis.Args{Keys.JobsTimeIndex.Key(), pastTime, "two", pastTime, "four"}, nil)
 	// One set will mimic the queued set
 	tx0.command("ZADD", redis.Args{StatusQueued.Key(), 1, "one", 2, "two", 3, "three", 4, "four"}, nil)
 	// One set will mimic the executing set
@@ -67,7 +68,7 @@ func TestPopNextJobsScript(t *testing.T) {
 	if !reflect.DeepEqual(expectedQueued, gotQueued) {
 		t.Errorf("Ids in the queued set were incorrect.\n\tExpected: %v\n\tBut got:  %v", expectedQueued, gotQueued)
 	}
-	expectKeyNotExists(t, Keys.JobsTemp)
+	expectKeyNotExists(t, Keys.JobsTemp.Key())
 }
 
 func TestRetryOrFailJobScript(t *testing.T) {
@@ -218,7 +219,7 @@ func TestPurgeStalePoolScript(t *testing.T) {
 	// Add both pools to the set of active pools
 	conn := redisPool.Get()
 	defer conn.Close()
-	if _, err := conn.Do("SADD", Keys.ActivePools, stalePoolId, activePoolId); err != nil {
+	if _, err := conn.Do("SADD", Keys.ActivePools.Key(), stalePoolId, activePoolId); err != nil {
 		t.Errorf("Unexpected error adding pools to set: %s", err)
 	}
 
@@ -231,8 +232,8 @@ func TestPurgeStalePoolScript(t *testing.T) {
 
 	// Check the result
 	// The active pools set should contain only the activePoolId
-	expectSetDoesNotContain(t, Keys.ActivePools, stalePoolId)
-	expectSetContains(t, Keys.ActivePools, activePoolId)
+	expectSetDoesNotContain(t, Keys.ActivePools.Key(), stalePoolId)
+	expectSetContains(t, Keys.ActivePools.Key(), activePoolId)
 	// All the active jobs should still be executing
 	for _, job := range activeJobs {
 		if err := job.Refresh(); err != nil {
@@ -338,7 +339,7 @@ func TestAddJobToSetScript(t *testing.T) {
 	// Add the job to the time index with a score of 7 days ago
 	tx := newTransaction()
 	expectedScore := float64(time.Now().Add(-7 * 24 * time.Hour).UTC().UnixNano())
-	tx.addJobToSet(job, Keys.JobsTimeIndex, expectedScore)
+	tx.addJobToSet(job, Keys.JobsTimeIndex.Key(), expectedScore)
 	if err := tx.exec(); err != nil {
 		t.Errorf("Unexpected err in tx.exec(): %s", err.Error())
 	}
@@ -346,7 +347,7 @@ func TestAddJobToSetScript(t *testing.T) {
 	// Make sure the job was added to the set properly
 	conn := redisPool.Get()
 	defer conn.Close()
-	score, err := redis.Float64(conn.Do("ZSCORE", Keys.JobsTimeIndex, job.id))
+	score, err := redis.Float64(conn.Do("ZSCORE", Keys.JobsTimeIndex.Key(), job.id))
 	if err != nil {
 		t.Errorf("Unexpected error in ZSCORE: %s", err.Error())
 	}

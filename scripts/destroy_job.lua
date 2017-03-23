@@ -13,14 +13,15 @@
 
 -- Assign args to variables for easy reference
 local jobId = ARGV[1]
-local jobKey = 'jobs:' .. jobId
+local prefix = ARGV[2]
+local jobKey = prefix .. jobId
 -- Remove the job from the status set
 local status = redis.call('HGET', jobKey, 'status')
 if status ~= '' then
-	local statusSet = 'jobs:' .. status
+	local statusSet = prefix .. status
 	redis.call('ZREM', statusSet, jobId)
 end
 -- Remove the job from the time index
-redis.call('ZREM', '{{.timeIndexSet}}', jobId)
+redis.call('ZREM', prefix .. '{{.timeIndexSet}}', jobId)
 -- Remove the main hash for the job
 redis.call('DEL', jobKey)

@@ -4,11 +4,10 @@
 
 package jobs
 
-import ()
-
 // configType holds different config variables
 type configType struct {
-	Db databaseConfig
+	Db        databaseConfig
+	envPrefix string
 }
 
 // databaseConfig holds config variables specific to the database
@@ -38,4 +37,19 @@ var Config = configType{
 		// "" (an empty string).
 		Password: "",
 	},
+	envPrefix: "",
+}
+
+func (c *configType) SetEnvPrefix(p string) {
+	if p == "" {
+		return
+	}
+	c.envPrefix = p
+}
+func (c *configType) GetKeyPrefix() string {
+	var hardCodedPrefix = "jobs:"
+	if c.envPrefix == "" {
+		return hardCodedPrefix
+	}
+	return c.envPrefix + ":" + hardCodedPrefix
 }

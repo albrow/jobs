@@ -19,7 +19,8 @@
 
 -- Assign args to variables for easy reference
 local jobId = ARGV[1]
-local jobKey = 'jobs:' .. jobId
+local prefix = ARGV[2]
+local jobKey = prefix .. jobId
 -- Make sure the job hasn't already been destroyed
 local exists = redis.call('EXISTS', jobKey)
 if exists ~= 1 then
@@ -40,12 +41,12 @@ end
 -- Get the job priority (used as score)
 local jobPriority = redis.call('HGET', jobKey, 'priority')
 -- Add the job to the appropriate new set
-local newStatusSet = 'jobs:' .. newStatus
+local newStatusSet = prefix .. newStatus
 redis.call('ZADD', newStatusSet, jobPriority, jobId)	
 -- Remove the job from the old status set
 local oldStatus = redis.call('HGET', jobKey, 'status')
 if ((oldStatus ~= '') and (oldStatus ~= newStatus)) then
-	local oldStatusSet = 'jobs:' .. oldStatus
+	local oldStatusSet = prefix .. oldStatus
 	redis.call('ZREM', oldStatusSet, jobId)
 end
 -- Set the job status in the hash

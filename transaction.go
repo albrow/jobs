@@ -6,8 +6,9 @@ package jobs
 
 import (
 	"fmt"
-	"github.com/garyburd/redigo/redis"
 	"time"
+
+	"github.com/garyburd/redigo/redis"
 )
 
 // transaction is an abstraction layer around a redis transaction.
@@ -251,7 +252,7 @@ func newScanBoolHandler(b *bool) replyHandler {
 // The script will get the next n jobs from the queue that are ready based on their time parameter.
 func (t *transaction) popNextJobs(n int, poolId string, handler replyHandler) {
 	currentTime := time.Now().UTC().UnixNano()
-	t.script(popNextJobsScript, redis.Args{n, currentTime, poolId}, handler)
+	t.script(popNextJobsScript, redis.Args{n, currentTime, poolId, Config.GetKeyPrefix()}, handler)
 }
 
 // retryOrFailJob is a small function wrapper around retryOrFailJobScript.
@@ -259,7 +260,7 @@ func (t *transaction) popNextJobs(n int, poolId string, handler replyHandler) {
 // The script will either mark the job as failed or queue it for retry depending on the number of
 // retries left.
 func (t *transaction) retryOrFailJob(job *Job, handler replyHandler) {
-	t.script(retryOrFailJobScript, redis.Args{job.id}, handler)
+	t.script(retryOrFailJobScript, redis.Args{job.id, Config.GetKeyPrefix()}, handler)
 }
 
 // setStatus is a small function wrapper around setStatusScript.
@@ -267,14 +268,14 @@ func (t *transaction) retryOrFailJob(job *Job, handler replyHandler) {
 // The script will atomically update the status of the job, removing it from its old status set and
 // adding it to the new one.
 func (t *transaction) setStatus(job *Job, status Status) {
-	t.script(setJobStatusScript, redis.Args{job.id, string(status)}, nil)
+	t.script(setJobStatusScript, redis.Args{job.id, string(status), Config.GetKeyPrefix()}, nil)
 }
 
 // destroyJob is a small function wrapper around destroyJobScript.
 // It offers some type safety and helps make sure the arguments you pass through to the are correct.
 // The script will remove all records associated with job from the database.
 func (t *transaction) destroyJob(job *Job) {
-	t.script(destroyJobScript, redis.Args{job.id}, nil)
+	t.script(destroyJobScript, redis.Args{job.id, Config.GetKeyPrefix()}, nil)
 }
 
 // purgeStalePool is a small function wrapper around purgeStalePoolScript.
@@ -282,7 +283,7 @@ func (t *transaction) destroyJob(job *Job) {
 // The script will remove the stale pool from the active pools set, and then requeue any jobs associated
 // with the stale pool that are stuck in the executing set.
 func (t *transaction) purgeStalePool(poolId string) {
-	t.script(purgeStalePoolScript, redis.Args{poolId}, nil)
+	t.script(purgeStalePoolScript, redis.Args{poolId, Config.GetKeyPrefix()}, nil)
 }
 
 // getJobsByIds is a small function wrapper around getJobsByIdsScript.
@@ -290,7 +291,7 @@ func (t *transaction) purgeStalePool(poolId string) {
 // The script will return all the fields for jobs which are identified by ids in the given sorted set.
 // You can use the handler to scan the jobs into a slice of jobs.
 func (t *transaction) getJobsByIds(setKey string, handler replyHandler) {
-	t.script(getJobsByIdsScript, redis.Args{setKey}, handler)
+	t.script(getJobsByIdsScript, redis.Args{setKey, Config.GetKeyPrefix()}, handler)
 }
 
 // setJobField is a small function wrapper around setJobFieldScript.
@@ -298,7 +299,7 @@ func (t *transaction) getJobsByIds(setKey string, handler replyHandler) {
 // The script will set the given field to the given value iff the job exists and has not been
 // destroyed.
 func (t *transaction) setJobField(job *Job, fieldName string, fieldValue interface{}) {
-	t.script(setJobFieldScript, redis.Args{job.id, fieldName, fieldValue}, nil)
+	t.script(setJobFieldScript, redis.Args{job.id, fieldName, fieldValue, Config.GetKeyPrefix()}, nil)
 }
 
 // addJobToSet is a small function wrapper around addJobToSetScript.
@@ -306,5 +307,5 @@ func (t *transaction) setJobField(job *Job, fieldName string, fieldValue interfa
 // The script will add the job to the given set with the given score iff the job exists
 // and has not been destroyed.
 func (t *transaction) addJobToSet(job *Job, setName string, score float64) {
-	t.script(addJobToSetScript, redis.Args{job.id, setName, score}, nil)
+	t.script(addJobToSetScript, redis.Args{job.id, setName, score, Config.GetKeyPrefix()}, nil)
 }

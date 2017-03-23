@@ -6,8 +6,9 @@ package jobs
 
 import (
 	"fmt"
-	"github.com/garyburd/redigo/redis"
 	"time"
+
+	"github.com/garyburd/redigo/redis"
 )
 
 // Job represents a discrete piece of work to be done by a worker.
@@ -117,7 +118,7 @@ func (j *Job) Duration() time.Duration {
 // Key returns the key used for the hash in redis which stores all the
 // fields for this job.
 func (j *Job) Key() string {
-	return "jobs:" + j.id
+	return Config.GetKeyPrefix() + j.id
 }
 
 // IsRecurring returns true iff the job is recurring
@@ -176,7 +177,7 @@ func (t *transaction) saveJob(job *Job) {
 // add the job id to the time index with a score equal to the job's time field.
 // If the job has been destroyed, addJobToTimeIndex will have no effect.
 func (t *transaction) addJobToTimeIndex(job *Job) {
-	t.addJobToSet(job, Keys.JobsTimeIndex, float64(job.time))
+	t.addJobToSet(job, Keys.JobsTimeIndex.Key(), float64(job.time))
 }
 
 // Refresh mutates the job by setting its fields to the most recent data

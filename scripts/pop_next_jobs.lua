@@ -44,30 +44,31 @@
 local n = ARGV[1]
 local currentTime = ARGV[2]
 local poolId = ARGV[3]
+local prefix = ARGV[4]
 -- Copy the time index set to a new temporary set
-redis.call('ZUNIONSTORE', '{{.jobsTempSet}}', 1, '{{.timeIndexSet}}')
+redis.call('ZUNIONSTORE', prefix .. '{{.jobsTempSet}}', 1, prefix .. '{{.timeIndexSet}}')
 -- Trim the new temporary set we just created to leave only the jobs which have a time
 -- parameter in the past
-redis.call('ZREMRANGEBYSCORE', '{{.jobsTempSet}}', currentTime, '+inf')
+redis.call('ZREMRANGEBYSCORE', prefix .. '{{.jobsTempSet}}', currentTime, '+inf')
 -- Intersect the jobs which are ready based on their time with those in the
 -- queued set. Use the weights parameter to set the scores entirely based on the
 -- queued set, effectively sorting the jobs by priority. Store the results in the
 -- temporary set.
-redis.call('ZINTERSTORE', '{{.jobsTempSet}}', 2, '{{.queuedSet}}', '{{.jobsTempSet}}', 'WEIGHTS', 1, 0)
+redis.call('ZINTERSTORE', prefix .. '{{.jobsTempSet}}', 2, prefix .. '{{.queuedSet}}', prefix .. '{{.jobsTempSet}}', 'WEIGHTS', 1, 0)
 -- Trim the temp set, so it contains only the first n jobs ordered by
 -- priority
-redis.call('ZREMRANGEBYRANK', '{{.jobsTempSet}}', 0, -n - 1)
+redis.call('ZREMRANGEBYRANK', prefix .. '{{.jobsTempSet}}', 0, -n - 1)
 -- Get all job ids from the temp set
-local jobIds = redis.call('ZREVRANGE', '{{.jobsTempSet}}', 0, -1)
+local jobIds = redis.call('ZREVRANGE', prefix .. '{{.jobsTempSet}}', 0, -1)
 local allJobs = {}
 if #jobIds > 0 then
 	-- Add job ids to the executing set
-	redis.call('ZUNIONSTORE', '{{.executingSet}}', 2, '{{.executingSet}}', '{{.jobsTempSet}}')
+	redis.call('ZUNIONSTORE', prefix .. '{{.executingSet}}', 2, prefix .. '{{.executingSet}}', prefix .. '{{.jobsTempSet}}')
 	-- Now we are ready to construct our response.
 	for i, jobId in ipairs(jobIds) do
-		local jobKey = 'jobs:' .. jobId
+		local jobKey = prefix .. jobId
 		-- Remove the job from the queued set
-		redis.call('ZREM', '{{.queuedSet}}', jobId)
+		redis.call('ZREM', prefix .. '{{.queuedSet}}', jobId)
 		-- Set the poolId field for the job
 		redis.call('HSET', jobKey, 'poolId', poolId)
 		-- Set the job status to executing
@@ -82,6 +83,6 @@ if #jobIds > 0 then
 	end
 end
 -- Delete the temporary set
-redis.call('DEL', '{{.jobsTempSet}}')
+redis.call('DEL', prefix .. '{{.jobsTempSet}}')
 -- Return all the fields for all the jobs
 return allJobs

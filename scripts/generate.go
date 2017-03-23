@@ -19,7 +19,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/yadvendar/jobs"
+	"github.com/albrow/jobs"
 )
 
 var (
@@ -70,7 +70,7 @@ func init() {
 	// Use build to find the directory where this file lives. This always works as
 	// long as you have go installed, even if you have multiple GOPATHs or are using
 	// dependency management tools.
-	pkg, err := build.Import("github.com/yadvendar/jobs", "", build.FindOnly)
+	pkg, err := build.Import("github.com/albrow/jobs", "", build.FindOnly)
 	if err != nil {
 		panic(err)
 	}

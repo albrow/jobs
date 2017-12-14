@@ -1,7 +1,23 @@
 Jobs
 ====
 
-A persistent and flexible background jobs library for go.
+Development Status
+------------------
+
+Jobs is ***no longer*** being actively developed. I will still try my best to
+respond to issues and pull requests, but in general you should not expect much
+support. No new features will be added. Still, Jobs is reasonably
+well-tested, and it is probably fine to use it for low-traffic hobby sites. If
+you are looking for something for more serious, production use-cases, consider
+alternatives such as [RabbitMQ](https://github.com/streadway/amqp).
+
+Jobs follows semantic versioning but offers no guarantees of backwards compatibility until version
+1.0.
+
+About
+-----
+
+Jobs is a persistent and flexible background jobs library for go.
 
 [![Version](https://img.shields.io/badge/version-0.4.2-5272B4.svg)](https://github.com/albrow/jobs/releases)
 [![Circle CI](https://img.shields.io/circleci/project/albrow/jobs.svg)](https://circleci.com/gh/albrow/jobs)
@@ -38,19 +54,6 @@ goroutine to accomplish the same thing, but in the event of a server restart or 
 the email might never be sent. Jobs guarantees that the email will be sent at some time
 and allows you to spread the work between different machines.
 
-
-Development Status
-------------------
-
-Jobs is being actively developed and is well-tested. However, since it is still a young library,
-it is not recommended for use in mission-critical production applications at this time. It is probably
-fine to use for low-traffic hobby sites, and in fact we encourage its use in those settings to help
-polish the API and find missing features and hidden bugs. Pull requests and issue reports are much
-appreciated :)
-
-Jobs follows semantic versioning but offers no guarantees of backwards compatibility until version
-1.0. Keep in mind that breaking changes might occur. We will do our best to make the community aware
-of any non-trivial breaking changes beforehand.
 
 Installation
 ------------
